@@ -2,7 +2,8 @@ import numpy as np
 import networkx as nx
 import matplotlib.pyplot as plt
 from tqdm import tqdm
-
+from price_statistics import * 
+from plots import *
 from volume_imbalance import calculate_volume_imbalance
 
 # Parameters for the simulation
@@ -26,7 +27,7 @@ for node in G.nodes:
     if node < NUM_HEDGE_FUNDS:
         G.nodes[node]['type'] = 'hedge_fund'
         G.nodes[node]['profit_threshold'] = np.random.normal(0.3, 0.1)  # Example profit threshold
-        G.nodes[node]['trade_size'] = np.random.uniform(1, 2)  # Random trade size
+        G.nodes[node]['trade_size'] = np.random.uniform(1, 4)  # Random trade size
     else:
         G.nodes[node]['type'] = 'trader'
         G.nodes[node]['profit_threshold'] = np.random.normal(0.3, 0.1)  # Example profit threshold (not used at the moment)
@@ -56,7 +57,7 @@ def update_positions(t):
 
         elif G.nodes[node]['type'] == 'trader':
             # Traders are influenced by neighbors
-            for neighbor in neighbors:
+            for neighbor in neighbors:              
                 influence = ALPHA * G.nodes[neighbor]['trade_size'] / 10 + BETA * len(neighbors)
                 if np.random.rand() < influence and G.nodes[node]['last_update_time'] < t - random_lags[t]:
                     G.nodes[node]['position'] = G.nodes[neighbor]['position']
@@ -74,16 +75,14 @@ def update_price():
     
     num_buyers.append(buyers)
     num_sellers.append(sellers)
-
-
-    #print("Buy Volume: ", buy_volume, "Sell Volume: ", sell_volume)
+    
     price += ETA * (buy_volume - sell_volume)
     prices.append(price)
 
 weighted_volumes = np.zeros(TIME_STEPS)
 
 # Run the simulation
-for t in tqdm(range(TIME_STEPS)):
+for t in tqdm(range(TIME_STEPS), desc="Time Step")):
     update_positions(t)
     update_price()
     weighted_volumes[t] = calculate_volume_imbalance(G)
@@ -92,6 +91,9 @@ for t in tqdm(range(TIME_STEPS)):
 moving_avg = np.convolve(prices, np.ones(25) / 25, mode='valid')
 
 print("Market volatility: ", np.std(prices))
+
+returns = calculate_price_returns(prices)
+print("The mean of returns is: ", np.mean(returns))
 
 plt.figure(figsize=(15, 6))
 
