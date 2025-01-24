@@ -1,6 +1,7 @@
 import numpy as np
 import networkx as nx
 import matplotlib.pyplot as plt
+from tqdm import tqdm
 
 # Parameters for the simulation
 NUM_NODES = 1000  # Total number of traders (including hedge funds)
@@ -71,12 +72,12 @@ def update_price():
     num_sellers.append(sellers)
 
 
-    print("Buy Volume: ", buy_volume, "Sell Volume: ", sell_volume)
+    #print("Buy Volume: ", buy_volume, "Sell Volume: ", sell_volume)
     price += ETA * (buy_volume - sell_volume)
     prices.append(price)
 
 # Run the simulation
-for t in range(TIME_STEPS):
+for t in tqdm(range(TIME_STEPS)):
     update_positions(t)
     update_price()
 
@@ -85,34 +86,18 @@ moving_avg = np.convolve(prices, np.ones(25) / 25, mode='valid')
 
 print("Market volatility: ", np.std(prices))
 
-# # Plot the price evolution
-# plt.plot(prices)
-# plt.plot(moving_avg)
-# plt.xlabel('Time Steps')
-# plt.ylabel('Market Price')
-# plt.title('Market Price Evolution')
-# plt.show()
-
 plt.figure(figsize=(10, 6))
 
-# Plot market price
+# Plot market price with moving average
 plt.subplot(2, 1, 1)
-plt.plot(prices, label='Market Price')
+plt.plot(prices, label='Market Price', color='blue')
+plt.plot(moving_avg, label='Moving Average', color='red')
 plt.xlabel('Time Steps')
 plt.ylabel('Market Price')
 plt.title('Market Price Evolution')
 plt.legend()
 
-# # plot the ratio of buyers and sellers
-# plt.subplot(2, 1, 2)
-# plt.plot(num_buyers, label='Buyers', color='blue')
-# plt.plot(num_sellers, label='Sellers', color='red')
-# plt.xlabel('Time Steps')
-# plt.ylabel('Number of Traders')
-# plt.title('Buyers and Sellers')
-# plt.legend()
-
-# plot ratio
+# Plot ratio of buyers and sellers
 ratio = [num_buyers[i] / (num_sellers[i] + num_buyers[i]) for i in range(len(num_buyers))]
 plt.subplot(2, 1, 2)
 plt.plot(ratio, label='Buyers/Sellers', color='green')
