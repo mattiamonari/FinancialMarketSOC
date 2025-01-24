@@ -1,6 +1,10 @@
 import numpy as np
 import networkx as nx
 import matplotlib.pyplot as plt
+from tqdm import tqdm
+from scipy.stats import norm
+import powerlaw
+
 
 # Parameters for the simulation
 NUM_NODES = 1000  # Total number of traders (including hedge funds)
@@ -29,8 +33,12 @@ for node in G.nodes:
     G.nodes[node]['position'] = 'buy' if np.random.random() < 0.5 else 'sell'
 
 # Initialize market price
-price = 100
+price = 0
 prices = [price]
+
+# Keep track of returns
+returns = []
+log_returns = []  
 
 # Function to update positions
 def update_positions(t):
@@ -54,18 +62,25 @@ def update_positions(t):
                     G.nodes[node]['last_update_time'] = t
 
 # Function to update market price
-def update_price():
+def update_price(t):
     global price
     buy_volume = sum(G.nodes[node]['trade_size'] for node in G.nodes if G.nodes[node]['position'] == 'buy')
     sell_volume = sum(G.nodes[node]['trade_size'] for node in G.nodes if G.nodes[node]['position'] == 'sell')
-    print("Buy Volume: ", buy_volume, "Sell Volume: ", sell_volume)
+    #print("Buy Volume: ", buy_volume, "Sell Volume: ", sell_volume)
     price += ETA * (buy_volume - sell_volume)
     prices.append(price)
 
+    # Calculate returns
+    if t > 1:
+        if prices[-2] != 0:  # Avoid division by zero
+            returns.append((prices[-1] - prices[-2]) / prices[-2])
+            log_returns.append(np.log(prices[-1] / prices[-2]))
+
+
 # Run the simulation
-for t in range(TIME_STEPS):
+for t in tqdm(range(1, TIME_STEPS)):
     update_positions(t)
-    update_price()
+    update_price(t)
 
 # Compute the moving average of the market price
 moving_avg = np.convolve(prices, np.ones(25) / 25, mode='valid')
@@ -79,3 +94,43 @@ plt.xlabel('Time Steps')
 plt.ylabel('Market Price')
 plt.title('Market Price Evolution')
 plt.show()
+
+# Plot the returns histogram and fit a normal distribution and also the same for log returns
+plt.figure(figsize=(10,5))
+
+# Plot histogram of returns
+plt.subplot(1,2,1)
+# Truncate the returns in the range (-0.1, 0.1) for better visualization
+returns = [r for r in returns if -0.1 <= r <= 0.1]
+plt.hist(returns, bins=30,density=True, alpha=0.6, color='g')
+
+# Fit a normal distribution to the returns
+mu, std = norm.fit(returns)
+xmin, xmax = plt.xlim()
+x = np.linspace(xmin, xmax, 100)
+p = norm.pdf(x, mu, std)
+plt.plot(x, p, 'k', linewidth=2)
+plt.title("Returns distribution: mu = %.2f,  std = %.2f" % (mu, std))
+
+# Plot histogram of log returns
+plt.subplot(1, 2, 2)
+# Remove non-finite values from log_returns
+log_returns = [lr for lr in log_returns if np.isfinite(lr) and -0.5 <= lr <= 0.5]
+plt.hist(log_returns, bins=50, range=(-.5,.5), density=True, alpha=0.6, color='g')
+
+# Fit a normal distribution to the log returns
+mu, std = norm.fit(log_returns)
+
+# Plot the fitted normal distribution
+xmin, xmax = plt.xlim()
+x = np.linspace(xmin, xmax, 1000)
+p = norm.pdf(x, mu, std)
+plt.plot(x, p, 'k', linewidth=2)
+plt.legend(['Normal Distribution Fit', 'Log Returns'])
+plt.title("Log Returns distribution: mu = %.2f,  std = %.2f" % (mu, std))
+plt.show()
+
+
+
+
+
