@@ -2,12 +2,11 @@ import numpy as np
 import networkx as nx
 import matplotlib.pyplot as plt
 from tqdm import tqdm
-from price_statistics import * 
+from market_statistics import * 
 from plots import *
-from volume_imbalance import calculate_volume_imbalance
 
 # Parameters for the simulation
-NUM_NODES = 10000  # Total number of traders (including hedge funds)
+NUM_NODES = 1000  # Total number of traders (including hedge funds)
 NUM_HEDGE_FUNDS = 10  # Number of hedge funds (high-degree nodes)
 ALPHA = 0.2  # Weight for trade size influence
 BETA = 0.1  # Weight for degree influence
@@ -16,7 +15,7 @@ ETA = 0.01  # Scaling factor for price changes
 TIME_STEPS = 1000  # Number of time steps for the simulation
 
 # Initialize a scale-free network using Barabási-Albert model
-G = nx.barabasi_albert_graph(NUM_NODES, m=5)
+G = nx.barabasi_albert_graph(NUM_NODES, m=NUM_HEDGE_FUNDS)
 
 # Initialize lists to track the number of buyers and sellers
 num_buyers = []
@@ -27,7 +26,7 @@ for node in G.nodes:
     if node < NUM_HEDGE_FUNDS:
         G.nodes[node]['type'] = 'hedge_fund'
         G.nodes[node]['profit_threshold'] = np.random.normal(0.3, 0.1)  # Example profit threshold
-        G.nodes[node]['trade_size'] = np.random.uniform(1, 4)  # Random trade size
+        G.nodes[node]['trade_size'] = np.random.uniform(10, 50)  # Random trade size
     else:
         G.nodes[node]['type'] = 'trader'
         G.nodes[node]['profit_threshold'] = np.random.normal(0.3, 0.1)  # Example profit threshold (not used at the moment)
@@ -37,7 +36,7 @@ for node in G.nodes:
     G.nodes[node]['position'] = 'buy' if np.random.random() < 0.5 else 'sell'
 
 # Initialize market price
-price = 0
+price = 1000
 prices = [price]
 random_lags = np.random.randint(1, 5, size=TIME_STEPS)
 
@@ -82,45 +81,26 @@ def update_price():
 weighted_volumes = np.zeros(TIME_STEPS)
 
 # Run the simulation
-for t in tqdm(range(TIME_STEPS), desc="Time Step")):
+for t in tqdm(range(TIME_STEPS), desc="Time Step"):
     update_positions(t)
     update_price()
     weighted_volumes[t] = calculate_volume_imbalance(G)
 
 # Compute the moving average of the market price
 moving_avg = np.convolve(prices, np.ones(25) / 25, mode='valid')
-
 print("Market volatility: ", np.std(prices))
 
 returns = calculate_price_returns(prices)
 print("The mean of returns is: ", np.mean(returns))
+plot_returns(returns, saveFig=False)
 
+# Added for the 'profile view' in the plot. If in the future we remove it, change the method parameter and remove this.
 plt.figure(figsize=(15, 6))
-
-# Plot market price with moving average
-plt.subplot(3, 1, 1)
-plt.plot(prices, label='Market Price', color='blue')
-plt.plot(moving_avg, label='Moving Average', color='red')
-plt.xlabel('Time Steps')
-plt.ylabel('Market Price')
-plt.title('Market Price Evolution')
-plt.legend()
-
-# Plot ratio of buyers and sellers
+plot_market_price(prices, moving_avg, profiler_view=True, saveFig=False)
 ratio = [num_buyers[i] / (num_sellers[i] + num_buyers[i]) for i in range(len(num_buyers))]
-plt.subplot(3, 1, 2)
-plt.plot(ratio, label='Buyers/Sellers', color='green')
-plt.xlabel('Time Steps')
-plt.ylabel('Ratio')
-plt.title('Buyers/Sellers Ratio')
-plt.legend()
-plt.tight_layout()
-plt.show()
+plot_ratio_buyers_sellers(ratio, profiler_view=True, saveFig=False)
+plot_weighted_volumes(weighted_volumes, profiler_view=True, saveFig=False)
 
-plt.subplot(3, 1, 3)
-plt.plot(weighted_volumes)
-plt.ylim(0, 1)
-plt.xlabel('Time Steps')
-plt.ylabel('Volumes Proportion (Buy)')
 
-plt.show()
+
+
