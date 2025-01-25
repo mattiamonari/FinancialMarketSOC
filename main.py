@@ -13,7 +13,7 @@ BETA = 0.1  # Weight for degree influence
 GAMMA = 1  # Sensitivity for profit acceptance
 ETA = 0.01  # Scaling factor for price changes
 EXPONENTIAL_SCALING = 1.1 # Exponential scaling factor for high volume differences
-TIME_STEPS = 1000  # Number of time steps for the simulation
+TIME_STEPS = 100  # Number of time steps for the simulation
 
 # Initialize a scale-free network using Barabási-Albert model
 G = nx.barabasi_albert_graph(NUM_NODES, m=NUM_HEDGE_FUNDS)
@@ -73,13 +73,6 @@ def update_positions(t):
                 G.nodes[node]['position'] = G.nodes[influential_neighbor]['position']
                 G.nodes[node]['last_update_time'] = t
                 G.nodes[node]['trade_size'] = np.random.uniform(0.2, 1)  # Random trade size
-
-            # Traders are influenced by neighbors
-            # for neighbor in neighbors:              
-            #     influence = ALPHA * G.nodes[neighbor]['trade_size'] / 10 + BETA * len(neighbors)
-            #     if np.random.rand() < influence and G.nodes[node]['last_update_time'] < t - random_lags[t]:
-            #         G.nodes[node]['position'] = G.nodes[neighbor]['position']
-            #         G.nodes[node]['last_update_time'] = t
 
 # Function to update market price
 def update_price():
