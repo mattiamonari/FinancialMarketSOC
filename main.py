@@ -13,7 +13,7 @@ BETA = 0.1  # Weight for degree influence
 GAMMA = 1  # Sensitivity for profit acceptance
 ETA = 0.01  # Scaling factor for price changes
 EXPONENTIAL_SCALING = 1.1 # Exponential scaling factor for high volume differences
-TIME_STEPS = 100  # Number of time steps for the simulation
+TIME_STEPS = 1000  # Number of time steps for the simulation
 
 # Initialize a scale-free network using Barabási-Albert model
 G = nx.barabasi_albert_graph(NUM_NODES, m=NUM_HEDGE_FUNDS)
@@ -42,13 +42,18 @@ for idx, (node, degree) in enumerate(sorted_nodes):
 price = 1000
 prices = [price]
 random_lags = np.random.randint(1, 5, size=TIME_STEPS)
+hf_switches_sum = []
+traders_switches_sum = []
 
 # Function to update positions
 def update_positions(t):
     global price
     global random_lags
+    global hf_swithces_sum, traders_swithces_sum
     #Calculate max degree without hedge funds
     max_degree = max([d for n, d in G.degree if G.nodes[n]['type'] != 'hedge_fund'])
+    hf_swithces = 0
+    traders_swithces = 0
 
     for node in G.nodes:
         neighbors = list(G.neighbors(node))
@@ -58,6 +63,7 @@ def update_positions(t):
             profit = np.random.uniform(0, 1)  # Random profit for demonstration
             if np.random.rand() < 1 / (1 + np.exp(-GAMMA * (profit - G.nodes[node]['profit_threshold']))):
                 G.nodes[node]['position'] = 'buy' if G.nodes[node]['position'] == 'sell' else 'sell'
+                hf_swithces += 1 if G.nodes[node]['position'] == 'buy' else -1
                 G.nodes[node]['last_update_time'] = t
                 G.nodes[node]['trade_size'] = np.random.uniform(10, 50)  # Random trade size
         
@@ -71,8 +77,12 @@ def update_positions(t):
             if np.random.rand() < avg_influence:
                 influential_neighbor = max(neighbors, key=lambda n: G.degree[n])
                 G.nodes[node]['position'] = G.nodes[influential_neighbor]['position']
+                traders_swithces += 1 if G.nodes[node]['position'] == 'buy' else -1
                 G.nodes[node]['last_update_time'] = t
                 G.nodes[node]['trade_size'] = np.random.uniform(0.2, 1)  # Random trade size
+
+    hf_switches_sum.append(hf_swithces)
+    traders_switches_sum.append(traders_swithces)
 
 # Function to update market price
 def update_price():
@@ -118,6 +128,24 @@ plot_market_price(prices, moving_avg, profiler_view=True, saveFig=False)
 ratio = [num_buyers[i] / (num_sellers[i] + num_buyers[i]) for i in range(len(num_buyers))]
 plot_ratio_buyers_sellers(ratio, profiler_view=True, saveFig=False)
 plot_weighted_volumes(weighted_volumes, profiler_view=True, saveFig=False)
+
+plt.figure(figsize=(15, 6))
+plt.hist(hf_switches_sum + traders_switches_sum, bins=100)
+plt.xlabel('Number of Switches - sum')
+plt.ylabel('Frequency')
+plt.show()
+
+plt.figure(figsize=(15, 6))
+plt.hist(hf_switches_sum, bins=100)
+plt.xlabel('Number of Switches (HF)')
+plt.ylabel('Frequency')
+plt.show()
+
+plt.figure(figsize=(15, 6))
+plt.hist(traders_switches_sum, bins=100)
+plt.xlabel('Number of Switches (Traders)')
+plt.ylabel('Frequency')
+plt.show()
 
 
 
