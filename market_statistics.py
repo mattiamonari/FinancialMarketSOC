@@ -16,10 +16,17 @@ def calculate_volume_imbalance(G):
 
     return buy_volume / (sell_volume + buy_volume)
 
-def detect_avalanche(moving_avg, threshold_start=0.0015, threshold_end=0.01):
+def calculate_volumes(G):
+    buy_volume = sum(G.nodes[node]['trade_size'] for node in G.nodes if G.nodes[node]['position'] == 'buy')
+    sell_volume = sum(G.nodes[node]['trade_size'] for node in G.nodes if G.nodes[node]['position'] == 'sell')
+
+    return (buy_volume, sell_volume)
+
+def detect_avalanche(moving_avg, threshold_start=0.0015, threshold_end=0.01, num_buyers=None, num_sellers=None, buy_volumes=None, sell_volumes=None):
     avalanche_starts = []
     avalanche_ends = []
     avalanche_times = []
+    winner_fraction = []
     i = 1
     
     while i < len(moving_avg) - 1:
@@ -46,6 +53,16 @@ def detect_avalanche(moving_avg, threshold_start=0.0015, threshold_end=0.01):
                 avalanche_starts.append(start)
                 avalanche_ends.append(end)
 
+                if change > 0:
+                    frac = num_buyers[start] / (num_buyers[start] + num_sellers[start])
+                    frac_volumes = buy_volumes[start] / (buy_volumes[start] + sell_volumes[start])
+                    winner_fraction.append(frac)
+                else:
+                    frac = num_sellers[start] / (num_buyers[start] + num_sellers[start])
+                    frac_volumes = sell_volumes[start] / (buy_volumes[start] + sell_volumes[start])
+                    winner_fraction.append(frac)
+                print("Frac: ", frac)
+                print("Frac volumes: ", frac_volumes)
         # Increment to next time step
         i += 1
     
