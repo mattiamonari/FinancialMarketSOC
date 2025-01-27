@@ -15,14 +15,10 @@ GAMMA = 1  # Sensitivity for profit acceptance
 ETA = 0.01  # Scaling factor for price changes
 EXPONENTIAL_SCALING = 1.1 # Exponential scaling factor for high volume differences
 TIME_STEPS = 500  # Number of time steps for the simulation
-N_RUNS = 1000 # Number of repetitions of the experiment
-
-# Initialize a scale-free network using Barabási-Albert model
-G = nx.barabasi_albert_graph(NUM_NODES, m=NUM_HEDGE_FUNDS)
+N_RUNS = 1 # Number of repetitions of the experiment
 
 # Initialize lists to track the number of buyers and sellers
-num_buyers = []
-num_sellers = []
+random_lags = np.random.randint(1, 5, size=TIME_STEPS)
 
 def initialize_graph(G):
     # Order nodes by degree and assign attributes. This is done to ensure that hedge funds are high-degree nodes.
@@ -42,17 +38,9 @@ def initialize_graph(G):
 
     return G
 
-G = initialize_graph(G)
-
-# Initialize market price
-price = 1000
-prices = [price]
-random_lags = np.random.randint(1, 5, size=TIME_STEPS)
-
-# Function to update positions
-def update_positions(t):
-    global price
+def update_positions(G, t):
     global random_lags
+    
     #Calculate max degree without hedge funds
     max_degree = max([d for n, d in G.degree if G.nodes[n]['type'] != 'hedge_fund'])
 
@@ -80,9 +68,7 @@ def update_positions(t):
                 G.nodes[node]['last_update_time'] = t
                 G.nodes[node]['trade_size'] = np.random.uniform(0.2, 1)  # Random trade size
 
-# Function to update market price
-def update_price():
-    global price
+def update_price(G, price, num_buyers, num_sellers):
     buy_volume = sum(G.nodes[node]['trade_size'] for node in G.nodes if G.nodes[node]['position'] == 'buy')
     sell_volume = sum(G.nodes[node]['trade_size'] for node in G.nodes if G.nodes[node]['position'] == 'sell')
 
@@ -100,15 +86,24 @@ def update_price():
     else:
         price += ETA * (buy_volume - sell_volume)
 
-    prices.append(price)
+    return price
 
 def run_simulation():
-    global G
+    price = 1000
+    prices = [price]
+    num_buyers = []
+    num_sellers = []
+    buy_volumes = np.zeros(TIME_STEPS)
+    sell_volumes = np.zeros(TIME_STEPS)
+
+    G = nx.barabasi_albert_graph(NUM_NODES, m=NUM_HEDGE_FUNDS)
     G = initialize_graph(G)
+
     # Run the simulation
     for t in range(TIME_STEPS):
-        update_positions(t)
-        update_price()
+        update_positions(G, t)
+        prices.append(update_price(G, prices[-1], num_buyers, num_sellers))
+        buy_volumes[t], sell_volumes[t] = calculate_volumes(G)
 
     returns = calculate_price_returns(prices)
     print("The mean of returns is: ", np.mean(returns))
@@ -116,7 +111,8 @@ def run_simulation():
     moving_avg = np.convolve(prices, np.ones(10) / 10, mode='valid')
     print("Market volatility: ", np.std(prices))
 
-    starts, ends, times = detect_avalanche(moving_avg, threshold_start=0.0015, threshold_end=0.001)
+    starts, ends, times = detect_avalanche(moving_avg, threshold_start=0.0015, threshold_end=0.001, num_buyers=num_buyers, num_sellers=num_sellers, 
+                                           buy_volumes=buy_volumes, sell_volumes=sell_volumes)
     
     plt.plot(prices, label='Market Price', color='blue')
     plt.plot(moving_avg, label='Moving Average', color='red')
@@ -129,19 +125,24 @@ def run_simulation():
 
     if len(ends) != len(starts):
         ends.append(len(prices) -  1)
-
+    
     price_starts = [prices[i] for i in starts]
     price_ends = [prices[i] for i in ends]
-    price_diff = [np.abs(price_ends[i] - price_starts[i]) for i in range(len(price_starts))]
-
+    price_diff = [np.abs(price_ends[i] - price_starts[i]) for i in range(len(price_starts))]    
     return price_diff, times
 
 def main():
     weighted_volumes = np.zeros(TIME_STEPS)
+    price = 1000
+    prices = [price]
+    num_buyers = []
+    num_sellers = []
 
+    G = nx.barabasi_albert_graph(NUM_NODES, m=NUM_HEDGE_FUNDS)
+    G = initialize_graph(G)
     for t in tqdm(range(TIME_STEPS), desc="Time step"):
-        update_positions(t)
-        update_price()
+        update_positions(G, t)
+        prices.append(update_price(G, prices[-1], num_buyers, num_sellers))
         weighted_volumes[t] = calculate_volume_imbalance(G)
 
     # Compute the moving average of the market price
@@ -160,6 +161,8 @@ def main():
     all_times = []
     all_sizes = []
     print(f"Running {N_RUNS} runs")
+
+    run_simulation()
     
     with multiprocessing.Pool(10) as p:
         result = p.starmap(run_simulation, [() for i in tqdm(range(N_RUNS), desc="Time step")])
