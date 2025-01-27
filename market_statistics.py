@@ -1,5 +1,7 @@
+import numpy as np
 
-__all_ = ['calculate_price_returns', 'calculate_volume_imbalance']
+
+__all_ = ['calculate_price_returns', 'calculate_volume_imbalance', 'detect_avalanches']
 
 def calculate_price_returns(prices):
     returns = []
@@ -8,7 +10,7 @@ def calculate_price_returns(prices):
             returns.append(0)
             continue
         returns.append((prices[i + 1] - prices[i]) / prices[i])
-    return returns
+    return np.array(returns)
 
 def calculate_volume_imbalance(G):
     buy_volume = sum(G.nodes[node]['trade_size'] for node in G.nodes if G.nodes[node]['position'] == 'buy')
