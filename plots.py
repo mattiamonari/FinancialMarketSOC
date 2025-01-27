@@ -1,4 +1,5 @@
 import matplotlib.pyplot as plt
+import numpy as np
 
 __all_ = ['plot_returns']
 
@@ -72,3 +73,23 @@ def plot_weighted_volumes(weighted_volumes, profiler_view=False, saveFig=False):
         plt.savefig('weighted_volumes.pdf')
     else: # In this case since this is the last plot we show it even if profileview is True
         plt.show()
+
+def plot_avalanches(all_times, all_sizes):
+    plt.figure(figsize=(15, 6))
+    log_bins = np.logspace(np.log10(min(all_times)), np.log10(max(all_times)), 100)
+    print(all_times)
+    plt.hist(all_times, bins=log_bins, log=True)
+    plt.xlabel('Avalanche Duration')
+    plt.ylabel('Frequency')
+    plt.title('Distribution of Avalanche Durations')
+    plt.xscale('log')
+    plt.show()
+
+    plt.figure(figsize=(15, 6))
+    log_bins = np.logspace(np.log10(min(all_sizes)), np.log10(max(all_sizes)), 100)
+    plt.hist(all_sizes, bins=log_bins, log=True)
+    plt.xlabel('Price Difference')
+    plt.ylabel('Frequency')
+    plt.title('Avalanches Sizes')
+    plt.xscale('log')
+    plt.show()
