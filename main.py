@@ -7,16 +7,18 @@ from plots import *
 import multiprocessing
 
 from stylised_facts import *
+from utilities import lag_check
 
 # Parameters for the simulation
 NUM_NODES = 1000  # Total number of traders (including hedge funds)
 NUM_HEDGE_FUNDS = 10  # Number of hedge funds (high-degree nodes)
+NUM_RANDOM_TRADERS = 500  # Number of random traders - they are not subject to influence
 ALPHA = 0.05  # Weight for trade size influence
 BETA = 0.1  # Weight for degree influence
 GAMMA = 1  # Sensitivity for profit acceptance
-ETA = 0.01  # Scaling factor for price changes
-EXPONENTIAL_SCALING = 1.12 # Exponential scaling factor for high volume differences
-TIME_STEPS = 5000  # Number of time steps for the simulation
+ETA = 0.1  # Scaling factor for price changes
+EXPONENTIAL_SCALING = 2 # Exponential scaling factor for high volume differences
+TIME_STEPS = 1000  # Number of time steps for the simulation
 N_RUNS = 1 # Number of repetitions of the experiment
 HF_TRADE_LOWER = 10
 HF_TRADE_UPPER = 50
@@ -39,10 +41,15 @@ def initialize_graph(G):
             G.nodes[node]['profit_threshold'] = np.random.normal(0.5, 0.1)  # Example profit threshold
             G.nodes[node]['trade_size'] = np.random.uniform(HF_TRADE_LOWER, HF_TRADE_UPPER)  # Random trade size
         else:
-            G.nodes[node]['type'] = 'trader'
-            G.nodes[node]['profit_threshold'] = np.random.normal(0.3, 0.1)  # Example profit threshold (not used at the moment)
-            G.nodes[node]['trade_size'] = np.random.uniform(TR_TRADE_LOWER, TR_TRADE_UPPER)  # Random trade size
-        
+            # Idea: scatter random traders and influencable traders randomly
+            if idx < NUM_HEDGE_FUNDS + NUM_RANDOM_TRADERS and np.random.rand() < 0.5:
+                G.nodes[node]['type'] = 'random_trader'
+                G.nodes[node]['trade_size'] = np.random.exponential( 1 / TR_TRADE_LOWER)  # Random trade size
+            else:
+                G.nodes[node]['type'] = 'trader'
+                G.nodes[node]['profit_threshold'] = np.random.normal(0.3, 0.1)  # Example profit threshold (not used at the moment)
+                G.nodes[node]['trade_size'] = np.random.exponential( 1 / TR_TRADE_LOWER)  # Random trade size
+            
         G.nodes[node]['last_update_time'] = 0
         G.nodes[node]['position'] = 'buy' if np.random.random() < 0.5 else 'sell'
 
@@ -53,18 +60,17 @@ G = initialize_graph(G)
 # Initialize market price
 price = 1000
 prices = [price]
-random_lags = np.random.randint(1, 5, size=TIME_STEPS)
 random_noise = np.random.normal(0, 1, size=TIME_STEPS)
-
+t_f_controller = []
 # Function to update positions
 def update_positions(t):
     global price
-    global random_lags
     #Calculate max degree without hedge funds
     max_degree = max([d for n, d in G.degree if G.nodes[n]['type'] != 'hedge_fund'])
 
     for node in G.nodes:
         neighbors = list(G.neighbors(node))
+        last_update_time = G.nodes[node]['last_update_time']
         
         if G.nodes[node]['type'] == 'hedge_fund':
             # Hedge funds evaluate profit and decide to change position
@@ -77,16 +83,23 @@ def update_positions(t):
         elif G.nodes[node]['type'] == 'trader':
             influence_sum = 0
             for neighbor in neighbors:
-                influence = ALPHA * G.nodes[neighbor]['trade_size'] / 50 + 1/max_degree * G.degree[neighbor]
+                influence = ALPHA * G.nodes[neighbor]['trade_size'] / 50 + 5/max_degree * G.degree[neighbor]
                 influence_sum += influence   
         
             avg_influence = influence_sum / len(neighbors)
-            last_update_time = G.nodes[node]['last_update_time']
-            if (np.random.rand() < avg_influence and t - last_update_time >= np.random.randint(1, 5)):
+            if (np.random.rand() < avg_influence): # and lag_check(t, last_update_time, max_lag=5)):
+                t_f_controller.append(1)
                 influential_neighbor = max(neighbors, key=lambda n: G.degree[n])
                 G.nodes[node]['position'] = G.nodes[influential_neighbor]['position']
                 G.nodes[node]['last_update_time'] = t
-                G.nodes[node]['trade_size'] = np.random.uniform(0.2, 1)  # Random trade size
+                G.nodes[node]['trade_size'] = np.random.exponential( 1 / TR_TRADE_LOWER)   # Random trade size
+
+        else:
+            # Add random lag to the update process
+            if True: # lag_check(t, last_update_time, max_lag=5):
+                G.nodes[node]['position'] = 'buy' if np.random.random() < 0.5 else 'sell'
+                G.nodes[node]['last_update_time'] = t
+                G.nodes[node]['trade_size'] = np.random.exponential( 1 / TR_TRADE_LOWER)  # Random trade size
 
 # Function to update market price
 def update_price(t):
@@ -102,10 +115,14 @@ def update_price(t):
    
     volume_difference = abs(buy_volume - sell_volume)
     # Apply exponential scaling for large volume differences
-    if volume_difference > (buy_volume + sell_volume) / 2.6:  # Example threshold
-        price += ETA * np.sign(buy_volume - sell_volume) * (volume_difference) ** EXPONENTIAL_SCALING
-    else:
-        price += ETA * (buy_volume - sell_volume)
+
+    price += ETA * (buy_volume - sell_volume) * np.random.exponential(1 / volume_difference)
+    print(price)
+
+    # if volume_difference > (buy_volume + sell_volume) / 2.5:  # Example threshold
+    #     price += ETA * np.sign(buy_volume - sell_volume) * (volume_difference) ** EXPONENTIAL_SCALING
+    # else:
+    #     price += ETA * (buy_volume - sell_volume)
     prices.append(price)
 
 def run_simulation():
@@ -150,6 +167,8 @@ def main():
         update_price(t)
         weighted_volumes[t] = calculate_volume_imbalance(G)
 
+    plt.plot(t_f_controller, color='green')
+    plt.show()
     # Compute the moving average of the market price
     moving_avg = np.convolve(prices, np.ones(10) / 10, mode='valid')
     print("Market volatility: ", np.std(prices))

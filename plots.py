@@ -93,3 +93,4 @@ def plot_avalanches(all_times, all_sizes):
     plt.title('Avalanches Sizes')
     plt.xscale('log')
     plt.show()
+
