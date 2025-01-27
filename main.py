@@ -4,6 +4,9 @@ import matplotlib.pyplot as plt
 from tqdm import tqdm
 from market_statistics import * 
 from plots import *
+import multiprocessing
+
+from stylised_facts import *
 
 # Parameters for the simulation
 NUM_NODES = 1000  # Total number of traders (including hedge funds)
@@ -12,9 +15,13 @@ ALPHA = 0.05  # Weight for trade size influence
 BETA = 0.1  # Weight for degree influence
 GAMMA = 1  # Sensitivity for profit acceptance
 ETA = 0.01  # Scaling factor for price changes
-EXPONENTIAL_SCALING = 1.1 # Exponential scaling factor for high volume differences
-TIME_STEPS = 10000  # Number of time steps for the simulation
-N_RUNS = 10 # Number of repetitions of the experiment
+EXPONENTIAL_SCALING = 1.12 # Exponential scaling factor for high volume differences
+TIME_STEPS = 5000  # Number of time steps for the simulation
+N_RUNS = 1 # Number of repetitions of the experiment
+HF_TRADE_LOWER = 10
+HF_TRADE_UPPER = 50
+TR_TRADE_LOWER = 0.2
+TR_TRADE_UPPER = 1
 
 # Initialize a scale-free network using Barabási-Albert model
 G = nx.barabasi_albert_graph(NUM_NODES, m=NUM_HEDGE_FUNDS)
@@ -23,26 +30,31 @@ G = nx.barabasi_albert_graph(NUM_NODES, m=NUM_HEDGE_FUNDS)
 num_buyers = []
 num_sellers = []
 
-# Order nodes by degree and assign attributes. This is done to ensure that hedge funds are high-degree nodes.
-sorted_nodes = sorted(G.degree, key=lambda x: x[1], reverse=True)  # Sort nodes by degree
-for idx, (node, degree) in enumerate(sorted_nodes):
-    if idx < NUM_HEDGE_FUNDS:
-        G.nodes[node]['type'] = 'hedge_fund'
-        G.nodes[node]['profit_threshold'] = np.random.normal(0.5, 0.1)  # Example profit threshold
-        G.nodes[node]['trade_size'] = np.random.uniform(10, 50)  # Random trade size
-    else:
-        G.nodes[node]['type'] = 'trader'
-        G.nodes[node]['profit_threshold'] = np.random.normal(0.3, 0.1)  # Example profit threshold (not used at the moment)
-        G.nodes[node]['trade_size'] = np.random.uniform(0.2, 1)  # Random trade size
-    
-    G.nodes[node]['last_update_time'] = 0
-    G.nodes[node]['position'] = 'buy' if np.random.random() < 0.5 else 'sell'
+def initialize_graph(G):
+    # Order nodes by degree and assign attributes. This is done to ensure that hedge funds are high-degree nodes.
+    sorted_nodes = sorted(G.degree, key=lambda x: x[1], reverse=True)  # Sort nodes by degree
+    for idx, (node, degree) in enumerate(sorted_nodes):
+        if idx < NUM_HEDGE_FUNDS:
+            G.nodes[node]['type'] = 'hedge_fund'
+            G.nodes[node]['profit_threshold'] = np.random.normal(0.5, 0.1)  # Example profit threshold
+            G.nodes[node]['trade_size'] = np.random.uniform(HF_TRADE_LOWER, HF_TRADE_UPPER)  # Random trade size
+        else:
+            G.nodes[node]['type'] = 'trader'
+            G.nodes[node]['profit_threshold'] = np.random.normal(0.3, 0.1)  # Example profit threshold (not used at the moment)
+            G.nodes[node]['trade_size'] = np.random.uniform(TR_TRADE_LOWER, TR_TRADE_UPPER)  # Random trade size
+        
+        G.nodes[node]['last_update_time'] = 0
+        G.nodes[node]['position'] = 'buy' if np.random.random() < 0.5 else 'sell'
 
+    return G
+
+G = initialize_graph(G)
 
 # Initialize market price
 price = 1000
 prices = [price]
 random_lags = np.random.randint(1, 5, size=TIME_STEPS)
+random_noise = np.random.normal(0, 1, size=TIME_STEPS)
 
 # Function to update positions
 def update_positions(t):
@@ -69,87 +81,108 @@ def update_positions(t):
                 influence_sum += influence   
         
             avg_influence = influence_sum / len(neighbors)
-            if np.random.rand() < avg_influence:
+            last_update_time = G.nodes[node]['last_update_time']
+            if (np.random.rand() < avg_influence and t - last_update_time >= np.random.randint(1, 5)):
                 influential_neighbor = max(neighbors, key=lambda n: G.degree[n])
                 G.nodes[node]['position'] = G.nodes[influential_neighbor]['position']
                 G.nodes[node]['last_update_time'] = t
                 G.nodes[node]['trade_size'] = np.random.uniform(0.2, 1)  # Random trade size
 
 # Function to update market price
-def update_price():
+def update_price(t):
     global price
     buy_volume = sum(G.nodes[node]['trade_size'] for node in G.nodes if G.nodes[node]['position'] == 'buy')
     sell_volume = sum(G.nodes[node]['trade_size'] for node in G.nodes if G.nodes[node]['position'] == 'sell')
-
     # Count the number of buyers and sellers
     buyers = sum(1 for node in G.nodes if G.nodes[node]['position'] == 'buy')
     sellers = sum(1 for node in G.nodes if G.nodes[node]['position'] == 'sell')
-    
+   
     num_buyers.append(buyers)
     num_sellers.append(sellers)
-    
+   
     volume_difference = abs(buy_volume - sell_volume)
     # Apply exponential scaling for large volume differences
-    if volume_difference > (buy_volume + sell_volume) / 2:  # Example threshold
-        price += ETA * np.sign(buy_volume - sell_volume) * (volume_difference ** EXPONENTIAL_SCALING)
+    if volume_difference > (buy_volume + sell_volume) / 2.6:  # Example threshold
+        price += ETA * np.sign(buy_volume - sell_volume) * (volume_difference) ** EXPONENTIAL_SCALING
     else:
         price += ETA * (buy_volume - sell_volume)
-
     prices.append(price)
 
-weighted_volumes = np.zeros(TIME_STEPS)
-
-# Variables to store avalanche information for all the runs
-all_times = []
-all_sizes = []
-
-print(f"Running {N_RUNS} runs")
-for _ in range(N_RUNS):
+def run_simulation():
+    global G
+    G = initialize_graph(G)
     # Run the simulation
+    for t in range(TIME_STEPS):
+        update_positions(t)
+        update_price(t)
+
+    returns = calculate_price_returns(prices)
+    print("The mean of returns is: ", np.mean(returns))
+
+    moving_avg = np.convolve(prices, np.ones(10) / 10, mode='valid')
+    print("Market volatility: ", np.std(prices))
+
+    starts, ends, times = detect_avalanche(moving_avg, threshold_start=0.0015, threshold_end=0.001)
+    
+    plt.plot(prices, label='Market Price', color='blue')
+    plt.plot(moving_avg, label='Moving Average', color='red')
+        
+    for i in range(len(starts)):
+        plt.vlines(starts[i], 800, 1200, colors='red', linestyles='dashed', linewidth=0.5)
+
+    for i in range(len(ends)):
+        plt.vlines(ends[i], 800, 1200, colors='green', linestyles='dashed', linewidth=0.5)
+
+    if len(ends) != len(starts):
+        ends.append(len(prices) -  1)
+
+    price_starts = [prices[i] for i in starts]
+    price_ends = [prices[i] for i in ends]
+    price_diff = [np.abs(price_ends[i] - price_starts[i]) for i in range(len(price_starts))]
+
+    return price_diff, times
+
+def main():
+    weighted_volumes = np.zeros(TIME_STEPS)
+
     for t in tqdm(range(TIME_STEPS), desc="Time step"):
         update_positions(t)
-        update_price()
+        update_price(t)
         weighted_volumes[t] = calculate_volume_imbalance(G)
 
     # Compute the moving average of the market price
     moving_avg = np.convolve(prices, np.ones(10) / 10, mode='valid')
     print("Market volatility: ", np.std(prices))
 
-    returns = calculate_price_returns(prices)
-    print("The mean of returns is: ", np.mean(returns))
-    # plot_returns(returns, saveFig=False)
-
     # Added for the 'profile view' in the plot. If in the future we remove it, change the method parameter and remove this.
-    # plt.figure(figsize=(15, 6))
-    # plot_market_price(prices, moving_avg, profiler_view=True, saveFig=False)
-    # ratio = [num_buyers[i] / (num_sellers[i] + num_buyers[i]) for i in range(len(num_buyers))]
-    # plot_ratio_buyers_sellers(ratio, profiler_view=True, saveFig=False)
-    # plot_weighted_volumes(weighted_volumes, profiler_view=True, saveFig=False)
+    plot_market_price(prices, moving_avg, profiler_view=True, saveFig=False)
+    ratio = [num_buyers[i] / (num_sellers[i] + num_buyers[i]) for i in range(len(num_buyers))]
+    plot_ratio_buyers_sellers(ratio, profiler_view=True, saveFig=False)
+    plot_weighted_volumes(weighted_volumes, profiler_view=True, saveFig=False)
 
-    starts, ends, times = detect_avalanche(moving_avg, threshold_start=0.0015, threshold_end=0.001)
-    # print("Number of avalanches: ", len(starts))
-    # print("avalanches ends: ", ends)
+    returns = calculate_price_returns(prices)
+    plot_returns(returns, saveFig=False)
 
-    price_starts = [prices[i] for i in starts]
-    price_ends = [prices[i] for i in ends]
-    price_diff = [np.abs(price_ends[i] - price_starts[i]) for i in range(len(price_starts))]
+    plot_returns_vs_time(returns**2, saveFig=False)
 
-    all_times.extend(times)
-    all_sizes.extend(price_diff)
+    returns_autocorrelation(returns, saveFig=False)
+    returns_autocorrelation(returns**2, saveFig=False)
 
-# plt.figure(figsize=(15, 6))
-# plt.plot(prices, label='Market Price', color='blue')
-# plt.plot(moving_avg, label='Moving Average', color='red')
+    all_times = []
+    all_sizes = []
+    print(f"Running {N_RUNS} runs")
     
-# for i in range(len(starts)):
-#     plt.vlines(starts[i], 800, 1200, colors='red', linestyles='dashed', linewidth=0.5)
+    # TODO: Uncomment this part to run multiple simulations and extract power law 
+    #       distributions for the avalanches
+    # with multiprocessing.Pool(10) as p:
+    #     result = p.starmap(run_simulation, [() for i in tqdm(range(N_RUNS), desc="Time step")])
 
-# for i in range(len(ends)):
-#     plt.vlines(ends[i], 800, 1200, colors='green', linestyles='dashed', linewidth=0.5)
-# plt.xlabel('Time Steps')
-# plt.ylabel('Market Price')
-# plt.title('Market Price Evolution')
-# plt.legend()
-# plt.show()
+    # for run in range(N_RUNS):
+    #     all_sizes.extend(result[run][0])
+    #     all_times.extend(result[run][1])
 
-plot_avalanches(all_times, all_sizes)
+    # plot_avalanches(all_times, all_sizes)
+
+
+if __name__ == "__main__":
+    main()

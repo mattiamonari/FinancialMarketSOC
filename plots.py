@@ -77,6 +77,7 @@ def plot_weighted_volumes(weighted_volumes, profiler_view=False, saveFig=False):
 def plot_avalanches(all_times, all_sizes):
     plt.figure(figsize=(15, 6))
     log_bins = np.logspace(np.log10(min(all_times)), np.log10(max(all_times)), 100)
+    print(all_times)
     plt.hist(all_times, bins=log_bins, log=True)
     plt.xlabel('Avalanche Duration')
     plt.ylabel('Frequency')

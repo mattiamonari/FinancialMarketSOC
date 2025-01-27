@@ -1,3 +1,5 @@
+import numpy as np
+
 
 __all_ = ['calculate_price_returns', 'calculate_volume_imbalance', 'detect_avalanches']
 
@@ -8,7 +10,7 @@ def calculate_price_returns(prices):
             returns.append(0)
             continue
         returns.append((prices[i + 1] - prices[i]) / prices[i])
-    return returns
+    return np.array(returns)
 
 def calculate_volume_imbalance(G):
     buy_volume = sum(G.nodes[node]['trade_size'] for node in G.nodes if G.nodes[node]['position'] == 'buy')
@@ -28,19 +30,24 @@ def detect_avalanche(moving_avg, threshold_start=0.0015, threshold_end=0.01):
         
         if abs(change) > threshold_start:
             # Mark avalanche start
-            avalanche_starts.append(i)
             
-            # Find avalanche end
+            start = i
+            end = -1
             for j in range(i + 1, len(moving_avg) - 1):
                 end_change = (moving_avg[j + 1] - moving_avg[j]) / moving_avg[j]
                 
                 if abs(end_change) < threshold_end:
-                    avalanche_ends.append(j)
                     avalanche_times.append(j - i)
+                    end = j
+                    
                     # Move index to the end of this avalanche
                     i = j
                     break
-        
+
+            if end != -1:
+                avalanche_starts.append(start)
+                avalanche_ends.append(end)
+
         # Increment to next time step
         i += 1
     
