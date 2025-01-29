@@ -1,5 +1,7 @@
 import matplotlib.pyplot as plt
 import numpy as np
+from wavelet import compute_pdf
+from scipy.stats import norm
 
 __all_ = ['plot_returns']
 
@@ -74,22 +76,50 @@ def plot_weighted_volumes(weighted_volumes, profiler_view=False, saveFig=False):
     else: # In this case since this is the last plot we show it even if profileview is True
         plt.show()
 
-def plot_avalanches(all_times, all_sizes):
-    plt.figure(figsize=(15, 6))
-    log_bins = np.logspace(np.log10(min(all_times)), np.log10(max(all_times)), 50)
-    print(all_times)
-    plt.hist(all_times, bins=log_bins, log=True)
-    plt.xlabel('Avalanche Duration')
-    plt.ylabel('Frequency')
-    plt.title('Distribution of Avalanche Durations')
-    plt.xscale('log')
+# def plot_avalanches(all_times, all_sizes):
+#     plt.figure(figsize=(15, 6))
+#     log_bins = np.logspace(np.log10(min(all_times)), np.log10(max(all_times)), 50)
+#     print(all_times)
+#     plt.hist(all_times, bins=log_bins, log=True)
+#     plt.xlabel('Avalanche Duration')
+#     plt.ylabel('Frequency')
+#     plt.title('Distribution of Avalanche Durations')
+#     plt.xscale('log')
+#     plt.show()
+
+#     plt.figure(figsize=(15, 6))
+#     log_bins = np.logspace(np.log10(min(all_sizes)), np.log10(max(all_sizes)), 50)
+#     plt.hist(all_sizes, bins=log_bins, log=True)
+#     plt.xlabel('Price Difference')
+#     plt.ylabel('Frequency')
+#     plt.title('Avalanches Sizes')
+#     plt.xscale('log')
+#     plt.show()
+
+def plot_original_vs_filtered_log_returns_pdf(log_returns, filtered_log_returns, bins=50, fit_gaussian_filtered = False):
+    original_bin_centers, original_pdf = compute_pdf(log_returns, bins=bins)
+    filtered_bin_centers, filtered_pdf = compute_pdf(filtered_log_returns, bins=bins)
+
+    if fit_gaussian_filtered:
+        # Fit a Gaussian to the filtered log returns
+        mu_filtered, std_filtered = norm.fit(filtered_log_returns)
+        gaussian_x = np.linspace(min(log_returns), max(log_returns), 500)
+        filtered_gaussian = norm.pdf(gaussian_x, mu_filtered, std_filtered)
+        plt.plot(gaussian_x, filtered_gaussian, '--', label="Gaussian Fit (Filtered)", color="green", alpha=0.8)
+
+    # Plot original log returns PDF
+    plt.plot(original_bin_centers, original_pdf, '^', label="Original Log Returns", alpha=0.7)
+
+    # Plot filtered log returns PDF
+    plt.plot(filtered_bin_centers, filtered_pdf, 'o', label="Filtered Log Returns", alpha=0.7)
+
+    plt.yscale("log")  # Logarithmic scale for better visibility of tails
+    plt.xlabel("Log Returns")
+    plt.ylabel("Probability Density")
+    plt.title("PDF of Logarithmic Returns Before and After Filtering")
+    plt.legend()
+    plt.grid(alpha=0.3)
+
     plt.show()
 
-    plt.figure(figsize=(15, 6))
-    log_bins = np.logspace(np.log10(min(all_sizes)), np.log10(max(all_sizes)), 50)
-    plt.hist(all_sizes, bins=log_bins, log=True)
-    plt.xlabel('Price Difference')
-    plt.ylabel('Frequency')
-    plt.title('Avalanches Sizes')
-    plt.xscale('log')
-    plt.show()
+#def plot_avalanches_on_log_returns():

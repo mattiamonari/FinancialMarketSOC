@@ -7,7 +7,7 @@ from scipy.stats import kurtosis, skew
 from scipy.ndimage import label
 import pywt
 import powerlaw
-
+from stylised_facts import *
 
 NUM_NODES = 1000 # Total number of traders (including hedge funds)
 NUM_HEDGE_FUNDS = 10  # Number of hedge funds (high-degree nodes)
@@ -16,7 +16,7 @@ ALPHA = 0.7  # Weight for trade size influence
 BETA = 0.3  # Weight for degree influence
 GAMMA = 1  # Sensitivity for profit acceptance
 ETA = 0.01  # Scaling factor for price changes
-TIME_STEPS = 50000  # Number of time steps for the simulation
+TIME_STEPS = 10000  # Number of time steps for the simulation
 
 # Initialize a scale-free network using Barabási-Albert model
 G = nx.barabasi_albert_graph(NUM_NODES, m=5)
@@ -66,7 +66,7 @@ def update_positions(t):
             # Traders are influenced by neighbors
             for neighbor in neighbors:
                 influence = ALPHA * G.nodes[neighbor]['trade_size'] / 10 + BETA * len(neighbors)
-                if np.random.rand() < influence and G.nodes[node]['last_update_time'] < t - 10:
+                if np.random.rand() < influence and G.nodes[node]['last_update_time'] < t:
                     G.nodes[node]['position'] = G.nodes[neighbor]['position']
                     G.nodes[node]['last_update_time'] = t
 
@@ -83,7 +83,8 @@ def update_price(t):
     global price
     buy_volume = sum(G.nodes[node]['trade_size'] for node in G.nodes if G.nodes[node]['position'] == 'buy')
     sell_volume = sum(G.nodes[node]['trade_size'] for node in G.nodes if G.nodes[node]['position'] == 'sell')
-    price += ETA * (buy_volume - sell_volume)
+    volume_difference = abs(buy_volume - sell_volume)
+    price += ETA * (buy_volume - sell_volume) * np.random.exponential(1/volume_difference)
     prices.append(price)
 
     # Calculate returns
@@ -279,7 +280,7 @@ plt.plot(filtered_bin_centers, filtered_pdf, 'o', label="Filtered Log Returns", 
 
 # Plot Gaussian for comparison
 # plt.plot(gaussian_x, original_gaussian, '-', label="Gaussian Fit (Original)", color="blue", alpha=0.8)
-# plt.plot(gaussian_x, filtered_gaussian, '--', label="Gaussian Fit (Filtered)", color="green", alpha=0.8)
+plt.plot(gaussian_x, filtered_gaussian, '--', label="Gaussian Fit (Filtered)", color="green", alpha=0.8)
 
 # Add labels and legend
 plt.yscale("log")  # Logarithmic scale for better visibility of tails
@@ -289,4 +290,9 @@ plt.title("PDF of Logarithmic Returns Before and After Filtering")
 plt.legend()
 plt.grid(alpha=0.3)
 
+
+
 plt.show()
+log_returns = np.array(log_returns)
+returns_autocorrelation(log_returns, saveFig=False)
+returns_autocorrelation(log_returns**2, saveFig=False)

@@ -4,6 +4,7 @@ import matplotlib.pyplot as plt
 from tqdm import tqdm
 from market_statistics import * 
 from plots import *
+from wavelet import *
 import multiprocessing
 
 from stylised_facts import *
@@ -12,7 +13,7 @@ from stylised_facts import *
 NUM_NODES = 1000  # Total number of traders (including hedge funds)
 NUM_HEDGE_FUNDS = 10  # Number of hedge funds (high-degree nodes)
 ALPHA = 0.05  # Weight for trade size influence
-BETA = 0.1  # Weight for degree influence
+BETA = 0.3  # Weight for degree influence
 GAMMA = 1  # Sensitivity for profit acceptance
 ETA = 0.01  # Scaling factor for price changes
 EXPONENTIAL_SCALING = 1.12 # Exponential scaling factor for high volume differences
@@ -188,6 +189,23 @@ def main():
     #     all_times.extend(result[run][1])
 
     # plot_avalanches(all_times, all_sizes)
+
+def plot_avalanches(prices): 
+    log_returns = calculate_log_returns(prices)
+
+    # Tune the threshold parameter C for wavelet filtering
+
+    C, filtered_signal, residual_signal = tune_threshold(log_returns, wavelet='db1', level=4, target_kurtosis=3, target_skew=0, tolerance=0.1)
+
+    # Extract avalanches from the residual signal
+
+    avalanche_threshold = 0.01
+
+    avalanche_sizes, avalanche_durations = extract_avalanches(residual_signal, avalanche_threshold)
+
+    
+
+
 
 
 if __name__ == "__main__":
