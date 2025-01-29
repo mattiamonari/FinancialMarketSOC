@@ -9,24 +9,30 @@ import pywt
 import powerlaw
 
 
-# Parameters for the simulation
-NUM_NODES = 1000  # Total number of traders (including hedge funds)
+NUM_NODES = 1000 # Total number of traders (including hedge funds)
 NUM_HEDGE_FUNDS = 10  # Number of hedge funds (high-degree nodes)
+RANDOM_TRADER_RATIO = 0.25  # Ratio of traders who act randomly
 ALPHA = 0.7  # Weight for trade size influence
 BETA = 0.3  # Weight for degree influence
 GAMMA = 1  # Sensitivity for profit acceptance
 ETA = 0.01  # Scaling factor for price changes
-TIME_STEPS = 1000  # Number of time steps for the simulation
+TIME_STEPS = 50000  # Number of time steps for the simulation
 
 # Initialize a scale-free network using Barabási-Albert model
 G = nx.barabasi_albert_graph(NUM_NODES, m=5)
 
-# Assign node attributes (traders and hedge funds)
+# Assign node attributes (traders, hedge funds, and random traders)
+num_random_traders = int(NUM_NODES * RANDOM_TRADER_RATIO)
+random_trader_indices = np.random.choice(range(NUM_HEDGE_FUNDS, NUM_NODES), size=num_random_traders, replace=False)
+
 for node in G.nodes:
     if node < NUM_HEDGE_FUNDS:
         G.nodes[node]['type'] = 'hedge_fund'
         G.nodes[node]['profit_threshold'] = np.random.normal(0.3, 0.1)  # Example profit threshold
         G.nodes[node]['trade_size'] = np.random.uniform(1, 2)  # Random trade size
+    elif node in random_trader_indices:
+        G.nodes[node]['type'] = 'random_trader'
+        G.nodes[node]['trade_size'] = np.random.uniform(0.2, 0.6)  # Random trade size
     else:
         G.nodes[node]['type'] = 'trader'
         G.nodes[node]['profit_threshold'] = np.random.normal(0.3, 0.1)  # Example profit threshold (not used at the moment)
@@ -64,12 +70,19 @@ def update_positions(t):
                     G.nodes[node]['position'] = G.nodes[neighbor]['position']
                     G.nodes[node]['last_update_time'] = t
 
+        elif G.nodes[node]['type'] == 'random_trader':
+            # Random traders change positions randomly
+            if np.random.rand() < 0.5:
+                G.nodes[node]['position'] = 'buy'
+            else:
+                G.nodes[node]['position'] = 'sell'
+            G.nodes[node]['last_update_time'] = t
+
 # Function to update market price
 def update_price(t):
     global price
     buy_volume = sum(G.nodes[node]['trade_size'] for node in G.nodes if G.nodes[node]['position'] == 'buy')
     sell_volume = sum(G.nodes[node]['trade_size'] for node in G.nodes if G.nodes[node]['position'] == 'sell')
-    #print("Buy Volume: ", buy_volume, "Sell Volume: ", sell_volume)
     price += ETA * (buy_volume - sell_volume)
     prices.append(price)
 
@@ -78,7 +91,6 @@ def update_price(t):
         if prices[-2] != 0:  # Avoid division by zero
             returns.append((prices[-1] - prices[-2]) / prices[-2])
             log_returns.append(np.log(prices[-1] / prices[-2]))
-
 
 # Run the simulation
 for t in tqdm(range(1, TIME_STEPS)):
@@ -163,7 +175,9 @@ def tune_threshold(log_returns, wavelet='db1', level=4, target_kurtosis=3, targe
     for _ in range(max_iter):
         # Filter coefficients using the current C
         filtered_coeffs = filter_wavelet_coefficients_paper(coeffs, C)
-        filtered_signal = pywt.waverec(filtered_coeffs, wavelet=wavelet)
+        filtered_signal = pywt.waverec(filtered_coeffs, wavelet=wavelet, mode='periodization')
+        # Truncate to match original length:
+        filtered_signal = filtered_signal[:len(log_returns)]
 
         # Compute residuals and their kurtosis/skewness
         residual_signal = log_returns - filtered_signal
@@ -179,7 +193,7 @@ def tune_threshold(log_returns, wavelet='db1', level=4, target_kurtosis=3, targe
 
         # Increment C to filter more aggressively
         C += 0.1
-    print(coeffs)
+    #print(coeffs)
     return C, filtered_signal, residual_signal
 
 # Perform wavelet filtering with dynamically tuned threshold
@@ -192,16 +206,23 @@ print(f"Optimal C: {C_optimal}")
 avalanche_threshold = 0.01  # Set threshold for high activity
 labeled_array, num_features = label(np.abs(residual_signal) > avalanche_threshold)
 
-# Extract avalanche sizes and durations
-avalanche_sizes = []
-avalanche_durations = []
-for i in range(1, num_features + 1):
-    indices = np.where(labeled_array == i)[0]
-    size = np.sum(np.abs(residual_signal[indices]))  # Sum of residuals during the avalanche
-    duration = len(indices)  # Number of time steps in the avalanche
-    avalanche_sizes.append(size)
-    avalanche_durations.append(duration)
+def extract_avalanches(residual_signal, avalanche_threshold=0.01):
+    """
+    Extracts avalanches from the residual signal based on a threshold.
+    Returns the avalanche sizes and durations.
+    """
+    labeled_array, num_features = label(np.abs(residual_signal) > avalanche_threshold)
+    avalanche_sizes = []
+    avalanche_durations = []
+    for i in range(1, num_features + 1):
+        indices = np.where(labeled_array == i)[0]
+        size = np.sum(np.abs(residual_signal[indices]))  # Sum of residuals during the avalanche
+        duration = len(indices)  # Number of time steps in the avalanche
+        avalanche_sizes.append(size)
+        avalanche_durations.append(duration)
+    return avalanche_sizes, avalanche_durations
 
+avalanche_sizes, avalanche_durations = extract_avalanches(residual_signal)
 # Analyze avalanche size distribution
 fit = powerlaw.Fit(avalanche_sizes)
 print(f"Power-law alpha: {fit.alpha}, xmin: {fit.xmin}")
@@ -212,7 +233,7 @@ fit.power_law.plot_pdf(color='r', linestyle='--')
 plt.title("Avalanche Size Distribution (Power-law Fit)")
 plt.xlabel("Avalanche Size")
 plt.ylabel("Probability Density")
-plt.show()
+#plt.show()
 
 # Visualize the original signal, filtered signal, and avalanches and residuals
 plt.figure(figsize=(12, 6))
@@ -226,7 +247,7 @@ plt.legend()
 plt.title("Avalanches in Log Returns (Residual Signal)")
 plt.xlabel("Time Steps")
 plt.ylabel("Log Returns")
-plt.show()
+#plt.show()
 
 # Compute PDF for original and filtered log returns
 def compute_pdf(data, bins=50):
@@ -257,11 +278,11 @@ plt.plot(original_bin_centers, original_pdf, '^', label="Original Log Returns", 
 plt.plot(filtered_bin_centers, filtered_pdf, 'o', label="Filtered Log Returns", alpha=0.7)
 
 # Plot Gaussian for comparison
-plt.plot(gaussian_x, original_gaussian, '-', label="Gaussian Fit (Original)", color="blue", alpha=0.8)
-plt.plot(gaussian_x, filtered_gaussian, '--', label="Gaussian Fit (Filtered)", color="green", alpha=0.8)
+# plt.plot(gaussian_x, original_gaussian, '-', label="Gaussian Fit (Original)", color="blue", alpha=0.8)
+# plt.plot(gaussian_x, filtered_gaussian, '--', label="Gaussian Fit (Filtered)", color="green", alpha=0.8)
 
 # Add labels and legend
-# plt.yscale("log")  # Logarithmic scale for better visibility of tails
+plt.yscale("log")  # Logarithmic scale for better visibility of tails
 plt.xlabel("Log Returns")
 plt.ylabel("Probability Density")
 plt.title("PDF of Logarithmic Returns Before and After Filtering")
