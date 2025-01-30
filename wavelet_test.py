@@ -296,3 +296,4 @@ plt.show()
 log_returns = np.array(log_returns)
 returns_autocorrelation(log_returns, saveFig=False)
 returns_autocorrelation(log_returns**2, saveFig=False)
+

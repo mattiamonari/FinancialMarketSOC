@@ -21,14 +21,13 @@ def filter_wavelet_coefficients_paper(coeffs, C):
     
     return filtered_coeffs
 
-def tune_threshold(log_returns, wavelet='db1', level=4, target_kurtosis=3, target_skew=0, tolerance=0.1):
+def tune_threshold(log_returns, wavelet='db1', level=4, target_kurtosis=3, target_skew=0, tolerance=0.1, max_iter = 1000):
     """
     Dynamically tune the threshold parameter C for wavelet filtering based on kurtosis and skewness. 
     The parameter C is a threshold coefficient that can be tuned such that Gaussian noise is filtered. 
     """
     coeffs = pywt.wavedec(log_returns, wavelet=wavelet, level=level)
-    C = 1  # Start with an initial threshold factor
-    max_iter = 50  # Limit the number of iterations
+    C = 1.0
 
     for _ in range(max_iter):
         # Filter coefficients using the current C

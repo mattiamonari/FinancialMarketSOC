@@ -2,8 +2,9 @@ import matplotlib.pyplot as plt
 import numpy as np
 from wavelet import compute_pdf
 from scipy.stats import norm
+import powerlaw
 
-__all_ = ['plot_returns']
+__all__ = ['plot_returns', 'plot_market_price', 'plot_ratio_buyers_sellers', 'plot_weighted_volumes', 'plot_returns_vs_time', 'plot_returns_distribution', 'plot_original_vs_filtered_log_returns_pdf', 'plot_avalanches_on_log_returns', 'plot_avalanche_sizes']
 
 def plot_returns_vs_time(returns, saveFig=False):
     plt.plot(returns)
@@ -122,4 +123,56 @@ def plot_original_vs_filtered_log_returns_pdf(log_returns, filtered_log_returns,
 
     plt.show()
 
-#def plot_avalanches_on_log_returns():
+def plot_avalanches_on_log_returns(log_returns, residual_signal, filtered_log_returns, labeled_array, num_features):
+    plt.figure(figsize=(12, 6))
+    plt.plot(log_returns, label="Original Log Returns", alpha=0.6)
+    plt.plot(residual_signal, label="Residual Signal", alpha=0.8)
+    plt.plot(filtered_log_returns, label="Filtered Signal", alpha=0.8)
+    for i in range(1, num_features + 1):
+        indices = np.where(labeled_array == i)[0]
+        plt.axvspan(indices[0], indices[-1], color='red', alpha=0.3, label="Avalanche" if i == 1 else None)
+    plt.legend()
+    plt.title("Avalanches in Log Returns (Residual Signal)")
+    plt.xlabel("Time Steps")
+    plt.ylabel("Log Returns")
+    plt.show()
+
+def plot_avalanche_sizes(avalanche_sizes):
+    """
+    Fits the provided avalanche_sizes to a power-law model and plots
+    the empirical distribution (PDF) as points (scatter) and the fitted 
+    power-law as a solid line.
+    Returns (alpha, xmin) and also prints them.
+    """
+    # Perform the fit
+    fit = powerlaw.Fit(avalanche_sizes)
+    alpha = fit.alpha
+    xmin = fit.xmin
+    
+    # Plot PDF of empirical data as points (no lines)
+    fig_pdf = fit.plot_pdf(
+        marker='o',      # Use circle markers
+        linestyle='none',# No line connecting points
+        color='b',
+        label='Empirical Data'
+    )
+    
+    # Plot the power-law fit as a solid line
+    fit.power_law.plot_pdf(
+        ax=fig_pdf,
+        color='r',
+        linestyle='-',    # Solid line
+        linewidth=2,
+        label='Power-Law Fit'
+    )
+
+    plt.title("Avalanche Size Distribution (Power-Law Fit)")
+    plt.xlabel("Avalanche Size")
+    plt.ylabel("Probability Density")
+    plt.legend()
+    plt.show()
+
+    print(f"Power-law alpha: {alpha}, xmin: {xmin}")
+    return alpha, xmin
+
+
