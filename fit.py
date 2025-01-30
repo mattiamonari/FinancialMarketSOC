@@ -1,13 +1,6 @@
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
-from scipy.stats import curve_fit
-
-
-def power_law(x, a, b, c):
-    return c - a * x ** (-b)
-
-
 
 def histogram_log_bins(x, x_min=None, x_max=None, num_bins=20, min_hits=1):
     """
@@ -67,7 +60,7 @@ def main():
     # ------------------------------------------------------------------------
     #  Adjust to your actual filenames/column names
     df1 = pd.read_csv("avalanche_durations_first.csv")        # or header=None, if no headers
-    df2 = pd.read_csv("avalanche_durations_second.csv")  # or header=None
+    df2 = pd.read_csv("avalanche_intertimes_second.csv")  # or header=None
 
     # If these files each have a column named "avalanche_size", do:
     avalanche_sizes_1 = df1.values
@@ -83,9 +76,6 @@ def main():
     # B) BUILD THE LOGARITHMIC HISTOGRAM
     # ------------------------------------------------------------------------
     # Adjust parameters as needed
-
-
-    
     counts, bin_centers, total_hits = histogram_log_bins(
         x=avalanche_sizes,
         x_min=None,      # or a specific positive float
@@ -118,17 +108,17 @@ def main():
     # ------------------------------------------------------------------------
     # E) LINEAR FIT IN LOG-LOG SPACE WITH ERROR ESTIMATES
     #    np.polyfit(..., cov=True) -> returns (coeffs, covariance_matrix)
-    # # ------------------------------------------------------------------------
-    # p, cov = np.polyfit(fit_log_x, fit_log_y, deg=1, cov=True)
-    # m, c = p  # slope, intercept
+    # ------------------------------------------------------------------------
+    p, cov = np.polyfit(fit_log_x, fit_log_y, deg=1, cov=True)
+    m, c = p  # slope, intercept
 
-    # # The diagonal of 'cov' are variances -> standard errors
-    # m_err = np.sqrt(cov[0, 0])
-    # c_err = np.sqrt(cov[1, 1])
+    # The diagonal of 'cov' are variances -> standard errors
+    m_err = np.sqrt(cov[0, 0])
+    c_err = np.sqrt(cov[1, 1])
 
-    # # For a power-law y ~ x^(-alpha), slope m = -alpha -> alpha = -m
-    # alpha = -m
-    # alpha_err = m_err  # same magnitude, just negative sign
+    # For a power-law y ~ x^(-alpha), slope m = -alpha -> alpha = -m
+    alpha = -m
+    alpha_err = m_err  # same magnitude, just negative sign
 
     # ------------------------------------------------------------------------
     # F) GENERATE SMOOTH LINE FOR PLOTTING THE FIT
