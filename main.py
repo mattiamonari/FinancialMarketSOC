@@ -132,7 +132,7 @@ def run_simulation():
     moving_avg = np.convolve(prices, np.ones(10) / 10, mode='valid')
     print("Market volatility: ", np.std(prices))
 
-    starts, ends, times = detect_avalanche(moving_avg, threshold_start=0.0015, threshold_end=0.001, num_buyers=num_buyers, num_sellers=num_sellers, 
+    starts, ends, times = detect_avalanches(moving_avg, threshold_start=0.0015, threshold_end=0.001, num_buyers=num_buyers, num_sellers=num_sellers, 
                                            buy_volumes=buy_volumes, sell_volumes=sell_volumes)
     
     plt.plot(prices, label='Market Price', color='blue')
@@ -167,27 +167,27 @@ def main():
         prices.append(update_price(G, prices[-1], num_buyers, num_sellers))
         weighted_volumes[t] = calculate_volume_imbalance(G)
 
-    # Computing the moving average of the market price
-    moving_avg = np.convolve(prices, np.ones(10) / 10, mode='valid')
-    print("Market volatility: ", np.std(prices))
+    # # Computing the moving average of the market price
+    # moving_avg = np.convolve(prices, np.ones(10) / 10, mode='valid')
+    # print("Market volatility: ", np.std(prices))
 
-    # Added for the 'profile view' in the plot. If in the future we remove it, change the method parameter and remove this.
-    plot_market_price(prices, moving_avg, profiler_view=True, saveFig=False)
-    ratio = [num_buyers[i] / (num_sellers[i] + num_buyers[i]) for i in range(len(num_buyers))]
-    plot_ratio_buyers_sellers(ratio, profiler_view=True, saveFig=False)
-    plot_weighted_volumes(weighted_volumes, profiler_view=True, saveFig=False)
+    # # Added for the 'profile view' in the plot. If in the future we remove it, change the method parameter and remove this.
+    # plot_market_price(prices, moving_avg, profiler_view=True, saveFig=False)
+    # ratio = [num_buyers[i] / (num_sellers[i] + num_buyers[i]) for i in range(len(num_buyers))]
+    # plot_ratio_buyers_sellers(ratio, profiler_view=True, saveFig=False)
+    # plot_weighted_volumes(weighted_volumes, profiler_view=True, saveFig=False)
 
-    returns = calculate_price_returns(prices)
-    plot_returns(returns, saveFig=False)
+    # returns = calculate_price_returns(prices)
+    # plot_returns(returns, saveFig=False)
 
-    plot_returns_vs_time(returns**2, saveFig=False)
+    # plot_returns_vs_time(returns**2, saveFig=False)
 
-    returns_autocorrelation(returns, saveFig=False)
-    returns_autocorrelation(returns**2, saveFig=False)
+    # returns_autocorrelation(returns, saveFig=False)
+    # returns_autocorrelation(returns**2, saveFig=False)
 
-    all_times = []
-    all_sizes = []
-    print(f"Running {N_RUNS} runs")
+    # all_times = []
+    # all_sizes = []
+    # print(f"Running {N_RUNS} runs")
     
     run_simulation()
 

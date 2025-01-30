@@ -61,10 +61,16 @@ def extract_avalanches(residual_signal, avalanche_threshold=0.01):
     labeled_array, num_features = label(np.abs(residual_signal) > avalanche_threshold)
     avalanche_sizes = []
     avalanche_durations = []
+    avalanche_intertimes = []
+    last_avalanche_time = 0
     for i in range(1, num_features + 1):
         indices = np.where(labeled_array == i)[0]
         size = np.sum(np.abs(residual_signal[indices]))  # Sum of residuals during the avalanche
         duration = len(indices)  # Number of time steps in the avalanche
+        if last_avalanche_time != 0:
+            intertime = indices[0] - last_avalanche_time
+            avalanche_intertimes.append(intertime)
+        last_avalanche_time = indices[-1]
         avalanche_sizes.append(size)
         avalanche_durations.append(duration)
     return avalanche_sizes, avalanche_durations

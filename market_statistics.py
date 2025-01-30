@@ -33,7 +33,7 @@ def calculate_volumes(G):
 
     return (buy_volume, sell_volume)
 
-def detect_avalanche(moving_avg, threshold_start=0.0015, threshold_end=0.01, num_buyers=None, num_sellers=None, buy_volumes=None, sell_volumes=None):
+def detect_avalanches(moving_avg, threshold_start=0.0015, threshold_end=0.01, num_buyers=None, num_sellers=None, buy_volumes=None, sell_volumes=None):
     avalanche_starts = []
     avalanche_ends = []
     avalanche_times = []
