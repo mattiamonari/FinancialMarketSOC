@@ -23,15 +23,50 @@ GAMMA = 1
 ETA = 0.01
 
 # Increase TIME_STEPS to gather more data, but note longer runs = longer time
-TIME_STEPS = 10000  
+TIME_STEPS = 10000
 
 # Number of simulations to run in parallel
-NUM_SIMULATIONS = 8  
+NUM_SIMULATIONS = 64
 
 # Number of parallel processes (often set to CPU threads; 
 # experiment with 8 vs 16 if you have an 8-core/16-thread CPU)
 NUM_PROCESSES = 8 
 
+
+
+
+def histogram_log_bins(x, x_min=None, x_max=None, num_of_bins=20, min_hits=1):
+    """
+    Generate histogram with logarithmically spaced bins.
+    """
+    if not x_min:
+        x_min = np.min(x)
+    if not x_max:
+        x_max = np.max(x)
+
+    # This is the factor that each subsequent bin is larger than the next.
+    growth_factor = (x_max / x_min) ** (1 / (num_of_bins + 1))
+    # Generates logarithmically spaced points from x_min to x_max.
+    bin_edges = np.logspace(np.log10(x_min), np.log10(x_max), num=num_of_bins + 1)
+    # We don't need the second argument (which are again the bin edges).
+    # It's conventional to denote arguments you don't intend to use with _.
+    bin_counts, _ = np.histogram(x, bins=bin_edges)
+    total_hits = np.sum(bin_counts)
+    bin_counts = bin_counts.astype(float)
+
+    # Rescale bin counts by their relative sizes.
+    significant_bins = []
+    for bin_index in range(np.size(bin_counts)):
+        if bin_counts[bin_index] >= min_hits:
+            significant_bins.append(bin_index)
+
+        bin_counts[bin_index] = bin_counts[bin_index] / (growth_factor ** bin_index)
+
+    # Is there a better way to get the center of a bin on logarithmic axis? There probably is, please figure it out.
+    bin_centers = (bin_edges[:-1] + bin_edges[1:]) / 2.
+
+    # You can optionally rescale the counts by total_hits if you want to get a density.
+    return bin_counts[significant_bins], bin_centers[significant_bins], total_hits
 
 
 # ------------------------------
@@ -134,15 +169,29 @@ def run_single_simulation(sim_id):
     mask = np.isfinite(log_returns)
     log_returns = log_returns[mask]
 
-    # 7. Wavelet filtering and avalanche extraction
-    C_optimal, filtered_log_returns, residual_signal = tune_threshold(log_returns)
-    avalanche_sizes, avalanche_durations = extract_avalanches(residual_signal, avalanche_threshold=0.01)
+    # # 7. Wavelet filtering and avalanche extraction
+    # C_optimal, filtered_log_returns, residual_signal = tune_threshold(log_returns)
+    # avalanche_sizes, avalanche_durations = extract_avalanches(residual_signal, avalanche_threshold=0.01)
+
+    wavelet = 'db1'	
+    level = 4
+    C = 3
+    if np.any(log_returns):
+        coeffs = pywt.wavedec(log_returns, wavelet=wavelet, level=level)
+        filtered_coeffs = filter_wavelet_coefficients_paper(coeffs, C)
+        filtered_log_returns = pywt.waverec(filtered_coeffs, wavelet='db1', mode='periodization')
+        filtered_log_returns = filtered_log_returns[:len(log_returns)]
+        residual_signal = log_returns - filtered_log_returns
+    else:
+        return -1
+    avalanche_sizes, avalanche_durations, avalanche_intertimes = extract_avalanches(residual_signal, avalanche_threshold=0.01)
 
     return {
         'sim_id': sim_id,
         'avalanche_sizes': avalanche_sizes,
         'avalanche_durations': avalanche_durations,
-        'C_optimal': C_optimal,
+        'avalanche_intertimes': avalanche_intertimes,
+        'C': C,
     }
 
 # ------------------------------
@@ -155,18 +204,61 @@ def main():
         it = pool.imap_unordered(run_single_simulation, range(NUM_SIMULATIONS), chunksize=1)
         results = []
         for result in tqdm(it, total=NUM_SIMULATIONS, desc="Running simulations in parallel"):
-            results.append(result)
+            if result != -1:
+                results.append(result)
 
     # Collect avalanche sizes from all simulations
     all_avalanche_sizes = []
+    all_avalanche_durations = []
+    all_avalanche_intertimes = []
     for res in results:
         all_avalanche_sizes.extend(res['avalanche_sizes'])
+        all_avalanche_durations.extend(res['avalanche_durations'])
+        all_avalanche_intertimes.extend(res['avalanche_intertimes'])
 
-    # Plot the aggregated avalanche sizes, get alpha & xmin
-    alpha, xmin = plot_avalanche_sizes(all_avalanche_sizes)
+    # save data as csv file
+    np.savetxt('avalanche_sizes.csv', all_avalanche_sizes, delimiter=',')
+    np.savetxt('avalanche_durations.csv', all_avalanche_durations, delimiter=',')
+    np.savetxt('avalanche_intertimes.csv', all_avalanche_intertimes, delimiter=',')
+
+    
+    all_avalanche_sizes_log_bins = histogram_log_bins(all_avalanche_sizes, num_of_bins=50, min_hits=1)
+
+    plt.scatter(all_avalanche_sizes_log_bins[1], all_avalanche_sizes_log_bins[0] / all_avalanche_sizes_log_bins[2])
+    plt.xlabel('Avalanche Size')
+    plt.ylabel('Frequency')
+    plt.title('Avalanche Size Distribution')   
+    plt.xscale('log')
+    plt.yscale('log')
+    plt.show()
+
+    all_avalanche_durations_log_bins = histogram_log_bins(all_avalanche_durations, num_of_bins=50, min_hits=1)
+
+    plt.scatter(all_avalanche_durations_log_bins[1], all_avalanche_durations_log_bins[0] / all_avalanche_durations_log_bins[2])
+    plt.xlabel('Avalanche duration')
+    plt.ylabel('Frequency')
+    plt.title('Avalanche Duration Distribution')   
+    plt.xscale('log')
+    plt.yscale('log')
+    plt.show()
+
+    all_avalanche_intertimes_log_bins = histogram_log_bins(all_avalanche_intertimes, num_of_bins=50, min_hits=1)
+
+    plt.scatter(all_avalanche_intertimes_log_bins[1], all_avalanche_intertimes_log_bins[0] / all_avalanche_intertimes_log_bins[2])
+    plt.xlabel('Avalanche inbetween times')
+    plt.ylabel('Frequency')
+    plt.title('Avalanche Inbetween Times Distribution')   
+    plt.xscale('log')
+    plt.yscale('log')
+    plt.show()
+
+
+    
+    # # Plot the aggregated avalanche sizes, get alpha & xmin
+    # alpha, xmin = plot_avalanche_sizes(all_avalanche_sizes)
 
     # Print them explicitly here as well
-    print(f"Aggregated Avalanche Sizes -> Power-law fit: alpha = {alpha}, xmin = {xmin}")
+    # print(f"Aggregated Avalanche Sizes -> Power-law fit: alpha = {alpha}, xmin = {xmin}")
 
 if __name__ == "__main__":
     main()

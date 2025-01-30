@@ -73,7 +73,7 @@ def extract_avalanches(residual_signal, avalanche_threshold=0.01):
         last_avalanche_time = indices[-1]
         avalanche_sizes.append(size)
         avalanche_durations.append(duration)
-    return avalanche_sizes, avalanche_durations
+    return avalanche_sizes, avalanche_durations, avalanche_intertimes
 
 # Compute PDF for original and filtered log returns
 def compute_pdf(data, bins=50):

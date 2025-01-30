@@ -171,8 +171,8 @@ def tune_threshold(log_returns, wavelet='db1', level=4, target_kurtosis=3, targe
     """
     coeffs = pywt.wavedec(log_returns, wavelet=wavelet, level=level)
     C = 1  # Start with an initial threshold factor
-    max_iter = 50  # Limit the number of iterations
-
+    max_iter = 5  # Limit the number of iterations
+    results = []
     for _ in range(max_iter):
         # Filter coefficients using the current C
         filtered_coeffs = filter_wavelet_coefficients_paper(coeffs, C)
@@ -193,20 +193,17 @@ def tune_threshold(log_returns, wavelet='db1', level=4, target_kurtosis=3, targe
             break
 
         # Increment C to filter more aggressively
-        C += 0.1
+        C += 1
     #print(coeffs)
-    return C, filtered_signal, residual_signal
+        results.append([C, filtered_signal, residual_signal])
+    return results
 
 # Perform wavelet filtering with dynamically tuned threshold
-# C_optimal, filtered_log_returns, residual_signal = tune_threshold(log_returns)
+results = tune_threshold(log_returns)
 
-wavelet = 'db1'	
-level = 4
-coeffs = pywt.wavedec(log_returns, wavelet=wavelet, level=level)
-filtered_coeffs = filter_wavelet_coefficients_paper(coeffs, C=3.0)
-filtered_log_returns = pywt.waverec(filtered_coeffs, wavelet='db1', mode='periodization')
-filtered_log_returns = filtered_log_returns[:len(log_returns)]
-residual_signal = log_returns - filtered_log_returns
+C = [result[0] for result in results]
+filtered_log_returns = [result[1] for result in results]
+residual_signal = [result[2] for result in results]
 
 
 # Print the optimal C and plot the results
@@ -215,6 +212,9 @@ residual_signal = log_returns - filtered_log_returns
 # Detect avalanches based on the residual signal
 avalanche_threshold = 0.01  # Set threshold for high activity
 labeled_array, num_features = label(np.abs(residual_signal) > avalanche_threshold)
+
+
+
 
 def extract_avalanches(residual_signal, avalanche_threshold=0.01):
     """
@@ -233,71 +233,34 @@ def extract_avalanches(residual_signal, avalanche_threshold=0.01):
     return avalanche_sizes, avalanche_durations
 
 
-def histogram_log_bins(x, x_min=None, x_max=None, num_of_bins=20, min_hits=1):
-    """
-    Generate histogram with logarithmically spaced bins.
-    """
-    if not x_min:
-        x_min = np.min(x)
-    if not x_max:
-        x_max = np.max(x)
-
-    # This is the factor that each subsequent bin is larger than the next.
-    growth_factor = (x_max / x_min) ** (1 / (num_of_bins + 1))
-    # Generates logarithmically spaced points from x_min to x_max.
-    bin_edges = np.logspace(np.log10(x_min), np.log10(x_max), num=num_of_bins + 1)
-    # We don't need the second argument (which are again the bin edges).
-    # It's conventional to denote arguments you don't intend to use with _.
-    bin_counts, _ = np.histogram(x, bins=bin_edges)
-    total_hits = np.sum(bin_counts)
-    bin_counts = bin_counts.astype(float)
-
-    # Rescale bin counts by their relative sizes.
-    significant_bins = []
-    for bin_index in range(np.size(bin_counts)):
-        if bin_counts[bin_index] >= min_hits:
-            significant_bins.append(bin_index)
-
-        bin_counts[bin_index] = bin_counts[bin_index] / (growth_factor ** bin_index)
-
-    # Is there a better way to get the center of a bin on logarithmic axis? There probably is, please figure it out.
-    bin_centers = (bin_edges[:-1] + bin_edges[1:]) / 2.
-
-    # You can optionally rescale the counts by total_hits if you want to get a density.
-    return bin_counts[significant_bins], bin_centers[significant_bins], total_hits
 
 
+# avalanche_sizes, avalanche_durations = extract_avalanches(residual_signal)
+# # Analyze avalanche size distribution
+# fit = powerlaw.Fit(avalanche_sizes)
+# print(f"Power-law alpha: {fit.alpha}, xmin: {fit.xmin}")
 
-avalanche_sizes, avalanche_durations = extract_avalanches(residual_signal)
-# Analyze avalanche size distribution
-fit = powerlaw.Fit(avalanche_sizes)
-print(f"Power-law alpha: {fit.alpha}, xmin: {fit.xmin}")
+# # Visualize avalanche size distribution with power-law fit
+# fit.plot_pdf(color='b', linewidth=2)
+# fit.power_law.plot_pdf(color='r', linestyle='--')
+# plt.title("Avalanche Size Distribution (Power-law Fit)")
+# plt.xlabel("Avalanche Size")
+# plt.ylabel("Probability Density")
+# #plt.show()
 
-log_bin_avalanche_sizes, log_bin_centers, total_hits = histogram_log_bins(avalanche_sizes, num_of_bins=50, min_hits=1)
-
-# Visualize avalanche size distribution with power-law fit
-fit.plot_pdf(color='b', linewidth=2)
-fit.power_law.plot_pdf(color='r', linestyle='--')
-plt.title("Avalanche Size Distribution (Power-law Fit)")
-plt.xlabel("Avalanche Size")
-plt.ylabel("Probability Density")
-
-plt.scatter(log_bin_centers, log_bin_avalanche_sizes / total_hits, color='g', label='Logarithmic Binning')
-plt.show()
-
-# Visualize the original signal, filtered signal, and avalanches and residuals
-plt.figure(figsize=(12, 6))
-plt.plot(log_returns, label="Original Log Returns", alpha=0.6)
-plt.plot(residual_signal, label="Residual Signal", alpha=0.8)
-plt.plot(filtered_log_returns, label="Filtered Signal", alpha=0.8)
-for i in range(1, num_features + 1):
-    indices = np.where(labeled_array == i)[0]
-    plt.axvspan(indices[0], indices[-1], color='red', alpha=0.3, label="Avalanche" if i == 1 else None)
-plt.legend()
-plt.title("Avalanches in Log Returns (Residual Signal)")
-plt.xlabel("Time Steps")
-plt.ylabel("Log Returns")
-#plt.show()
+# # Visualize the original signal, filtered signal, and avalanches and residuals
+# plt.figure(figsize=(12, 6))
+# plt.plot(log_returns, label="Original Log Returns", alpha=0.6)
+# plt.plot(residual_signal, label="Residual Signal", alpha=0.8)
+# plt.plot(filtered_log_returns, label="Filtered Signal", alpha=0.8)
+# for i in range(1, num_features + 1):
+#     indices = np.where(labeled_array == i)[0]
+#     plt.axvspan(indices[0], indices[-1], color='red', alpha=0.3, label="Avalanche" if i == 1 else None)
+# plt.legend()
+# plt.title("Avalanches in Log Returns (Residual Signal)")
+# plt.xlabel("Time Steps")
+# plt.ylabel("Log Returns")
+# #plt.show()
 
 # Compute PDF for original and filtered log returns
 def compute_pdf(data, bins=50):
@@ -305,43 +268,66 @@ def compute_pdf(data, bins=50):
     bin_centers = (bin_edges[:-1] + bin_edges[1:]) / 2
     return bin_centers, hist
 
-# Gaussian fit for comparison
 mu_original, std_original = norm.fit(log_returns)
-mu_filtered, std_filtered = norm.fit(filtered_log_returns)
-
 gaussian_x = np.linspace(min(log_returns), max(log_returns), 500)
-original_gaussian = norm.pdf(gaussian_x, mu_original, std_original)
-filtered_gaussian = norm.pdf(gaussian_x, mu_filtered, std_filtered)
+for i in range(len(C)):
+    avalanche_sizes, avalanche_durations = extract_avalanches(residual_signal[i])
+    filtered_bin_centers, filtered_pdf = compute_pdf(filtered_log_returns[i], bins=100)
+    mu_filtered, std_filtered = norm.fit(filtered_log_returns[i])
+    filtered_gaussian = norm.pdf(gaussian_x, mu_filtered, std_filtered)
+    filtered_bin_centers, filtered_pdf = compute_pdf(filtered_log_returns[i], bins=100)
 
-# Compute PDFs for original and filtered log returns
-bins = 50
-original_bin_centers, original_pdf = compute_pdf(log_returns, bins=bins)
-filtered_bin_centers, filtered_pdf = compute_pdf(filtered_log_returns, bins=bins)
 
-# Plot the results
-plt.figure(figsize=(10, 6))
-
-# Plot original log returns PDF
-plt.plot(original_bin_centers, original_pdf, '^', label="Original Log Returns", alpha=0.7)
-
-# Plot filtered log returns PDF
-plt.plot(filtered_bin_centers, filtered_pdf, 'o', label="Filtered Log Returns", alpha=0.7)
-
-# Plot Gaussian for comparison
-# plt.plot(gaussian_x, original_gaussian, '-', label="Gaussian Fit (Original)", color="blue", alpha=0.8)
-plt.plot(gaussian_x, filtered_gaussian, '--', label="Gaussian Fit (Filtered)", color="green", alpha=0.8)
-
-# Add labels and legend
+    plt.plot(filtered_bin_centers, filtered_pdf, 'o', label=f"Filtered Log Returns (C={C[i]})", alpha=0.7)
+    plt.plot(gaussian_x, filtered_gaussian, '--', label="Gaussian Fit (Filtered)", color="green", alpha=0.8)
+    plt.xlabel("Log Returns")
+    plt.ylabel("Probability Density")
+    plt.title("PDF of Logarithmic Returns Before and After Filtering")
+    plt.legend()
+    plt.grid(alpha=0.3)
+plt.hist(log_returns, bins=50, range=(-.5,.5), density=True, alpha=0.6, color='g')
 plt.yscale("log")  # Logarithmic scale for better visibility of tails
-plt.xlabel("Log Returns")
-plt.ylabel("Probability Density")
-plt.title("PDF of Logarithmic Returns Before and After Filtering")
-plt.legend()
-plt.grid(alpha=0.3)
-
-
 plt.show()
-log_returns = np.array(log_returns)
-returns_autocorrelation(log_returns, saveFig=False)
-returns_autocorrelation(log_returns**2, saveFig=False)
+
+
+# # Gaussian fit for comparison
+# mu_original, std_original = norm.fit(log_returns)
+# mu_filtered, std_filtered = norm.fit(filtered_log_returns)
+
+# gaussian_x = np.linspace(min(log_returns), max(log_returns), 500)
+# original_gaussian = norm.pdf(gaussian_x, mu_original, std_original)
+# filtered_gaussian = norm.pdf(gaussian_x, mu_filtered, std_filtered)
+
+# # Compute PDFs for original and filtered log returns
+# bins = 50
+# original_bin_centers, original_pdf = compute_pdf(log_returns, bins=bins)
+# filtered_bin_centers, filtered_pdf = compute_pdf(filtered_log_returns, bins=bins)
+
+# # Plot the results
+# plt.figure(figsize=(10, 6))
+
+# # Plot original log returns PDF
+# plt.plot(original_bin_centers, original_pdf, '^', label="Original Log Returns", alpha=0.7)
+
+# # Plot filtered log returns PDF
+# plt.plot(filtered_bin_centers, filtered_pdf, 'o', label="Filtered Log Returns", alpha=0.7)
+
+# # Plot Gaussian for comparison
+# # plt.plot(gaussian_x, original_gaussian, '-', label="Gaussian Fit (Original)", color="blue", alpha=0.8)
+# plt.plot(gaussian_x, filtered_gaussian, '--', label="Gaussian Fit (Filtered)", color="green", alpha=0.8)
+
+# # Add labels and legend
+# plt.yscale("log")  # Logarithmic scale for better visibility of tails
+# plt.xlabel("Log Returns")
+# plt.ylabel("Probability Density")
+# plt.title("PDF of Logarithmic Returns Before and After Filtering")
+# plt.legend()
+# plt.grid(alpha=0.3)
+
+
+
+# plt.show()
+# log_returns = np.array(log_returns)
+# returns_autocorrelation(log_returns, saveFig=False)
+# returns_autocorrelation(log_returns**2, saveFig=False)
 
