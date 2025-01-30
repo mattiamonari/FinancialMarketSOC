@@ -9,44 +9,52 @@ import multiprocessing
 
 from stylised_facts import *
 
-# Parameters for the simulation
+
+# Parameters for the simulation...
+
 NUM_NODES = 1000  # Total number of traders (including hedge funds)
 NUM_HEDGE_FUNDS = 10  # Number of hedge funds (high-degree nodes)
 ALPHA = 0.05  # Weight for trade size influence
 BETA = 0.3  # Weight for degree influence
 GAMMA = 1  # Sensitivity for profit acceptance
-ETA = 0.01  # Scaling factor for price changes
+ETA = 0.01      # Scaling factor for price changes
 EXPONENTIAL_SCALING = 1.12 # Exponential scaling factor for high volume differences
-TIME_STEPS = 5000  # Number of time steps for the simulation
-N_RUNS = 1 # Number of repetitions of the experiment
+TIME_STEPS = 5000      # Number of time steps for the simulation
+N_RUNS = 1    # Number of repetitions of the experiment
 HF_TRADE_LOWER = 10
 HF_TRADE_UPPER = 50
 TR_TRADE_LOWER = 0.2
 TR_TRADE_UPPER = 1
 
-# Initialize a scale-free network using Barabási-Albert model
+
+# A scale-free network is initialized (i.e. Barabasi-Albert network)
 G = nx.barabasi_albert_graph(NUM_NODES, m=NUM_HEDGE_FUNDS)
 
-# Initialize lists to track the number of buyers and sellers
+# Numpy array is initialized to track the number of buyers and sellers
 random_lags = np.random.randint(1, 5, size=TIME_STEPS)
 
+
 def initialize_graph(G):
-    # Order nodes by degree and assign attributes. This is done to ensure that hedge funds are high-degree nodes.
-    sorted_nodes = sorted(G.degree, key=lambda x: x[1], reverse=True)  # Sort nodes by degree
+    #  Nodes are ordered by degree and attributes are assigned. This is done to ensure that hedge funds are high-degree nodes.
+    sorted_nodes = sorted(G.degree, key=lambda x: x[1], reverse=True)     # Sort nodes by degree
     for idx, (node, degree) in enumerate(sorted_nodes):
         if idx < NUM_HEDGE_FUNDS:
             G.nodes[node]['type'] = 'hedge_fund'
-            G.nodes[node]['profit_threshold'] = np.random.normal(0.5, 0.1)  # Example profit threshold
-            G.nodes[node]['trade_size'] = np.random.uniform(HF_TRADE_LOWER, HF_TRADE_UPPER)  # Random trade size
+            G.nodes[node]['profit_threshold'] = np.random.normal(0.5, 0.1)      # Example profit threshold
+            G.nodes[node]['trade_size'] = np.random.uniform(HF_TRADE_LOWER, HF_TRADE_UPPER)      # Random trade size
         else:
             G.nodes[node]['type'] = 'trader'
-            G.nodes[node]['profit_threshold'] = np.random.normal(0.3, 0.1)  # Example profit threshold (not used at the moment)
-            G.nodes[node]['trade_size'] = np.random.uniform(TR_TRADE_LOWER, TR_TRADE_UPPER)  # Random trade size
+            G.nodes[node]['profit_threshold'] = np.random.normal(0.3, 0.1)    # Example profit threshold (not used at the moment)
+            G.nodes[node]['trade_size'] = np.random.uniform(TR_TRADE_LOWER, TR_TRADE_UPPER)     # Random trade size
         
         G.nodes[node]['last_update_time'] = 0
         G.nodes[node]['position'] = 'buy' if np.random.random() < 0.5 else 'sell'
 
     return G
+
+
+
+'''Trade positions update function'''
 
 def update_positions(G, t):
     global random_lags
@@ -58,12 +66,12 @@ def update_positions(G, t):
         neighbors = list(G.neighbors(node))
         
         if G.nodes[node]['type'] == 'hedge_fund':
-            # Hedge funds evaluate profit and decide to change position
-            profit = np.random.uniform(0, 1)  # Random profit for demonstration
+            # Hedge funds evaluate the profit and decide to change position
+            profit = np.random.uniform(0, 1)    # Random profit for demonstration
             if np.random.rand() < 1 / (1 + np.exp(-GAMMA * (profit - G.nodes[node]['profit_threshold']))):
                 G.nodes[node]['position'] = 'buy' if G.nodes[node]['position'] == 'sell' else 'sell'
                 G.nodes[node]['last_update_time'] = t
-                G.nodes[node]['trade_size'] = np.random.uniform(10, 50)  # Random trade size
+                G.nodes[node]['trade_size'] = np.random.uniform(10, 50)     # Random trade size
         
         elif G.nodes[node]['type'] == 'trader':
             influence_sum = 0
@@ -79,6 +87,8 @@ def update_positions(G, t):
                 G.nodes[node]['last_update_time'] = t
                 G.nodes[node]['trade_size'] = np.random.uniform(0.2, 1)  # Random trade size
 
+
+'''Price update function'''
 def update_price(G, price, num_buyers, num_sellers):
     buy_volume = sum(G.nodes[node]['trade_size'] for node in G.nodes if G.nodes[node]['position'] == 'buy')
     sell_volume = sum(G.nodes[node]['trade_size'] for node in G.nodes if G.nodes[node]['position'] == 'sell')
@@ -90,13 +100,14 @@ def update_price(G, price, num_buyers, num_sellers):
     num_sellers.append(sellers)
    
     volume_difference = abs(buy_volume - sell_volume)
-    # Apply exponential scaling for large volume differences
-    if volume_difference > (buy_volume + sell_volume) / 2.6:  # Example threshold
+    # Now, we apply exponential scaling for those large volume differences
+    if volume_difference > (buy_volume + sell_volume) / 2.6:   # Example threshold
         price += ETA * np.sign(buy_volume - sell_volume) * (volume_difference) ** EXPONENTIAL_SCALING
     else:
         price += ETA * (buy_volume - sell_volume)
 
     return price
+
 
 def run_simulation():
     price = 1000
@@ -141,6 +152,7 @@ def run_simulation():
     price_diff = [np.abs(price_ends[i] - price_starts[i]) for i in range(len(price_starts))]    
     return price_diff, times
 
+
 def main():
     weighted_volumes = np.zeros(TIME_STEPS)
     price = 1000
@@ -155,7 +167,7 @@ def main():
         prices.append(update_price(G, prices[-1], num_buyers, num_sellers))
         weighted_volumes[t] = calculate_volume_imbalance(G)
 
-    # Compute the moving average of the market price
+    # Computing the moving average of the market price
     moving_avg = np.convolve(prices, np.ones(10) / 10, mode='valid')
     print("Market volatility: ", np.std(prices))
 
