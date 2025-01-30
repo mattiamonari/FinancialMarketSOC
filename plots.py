@@ -176,3 +176,19 @@ def plot_avalanche_sizes(avalanche_sizes):
     return alpha, xmin
 
 
+def draw_network(num_nodes=500, m=5):
+
+    G = nx.barabasi_albert_graph(num_nodes, m)
+
+    plt.figure(figsize=(10, 10))
+    pos = nx.spring_layout(G, seed=42)  # Position nodes using Fruchterman-Reingold force-directed algorithm
+    nx.draw(G, pos, node_size=10, edge_color="gray", alpha=0.5, with_labels=False)
+
+    # we highlight the hedge funds (high-degree nodes)
+    high_degree_nodes = sorted(G.degree, key=lambda x: x[1], reverse=True)[:m]
+    high_degree_nodes = [node for node, _ in high_degree_nodes]
+    nx.draw_networkx_nodes(G, pos, nodelist=high_degree_nodes, node_size=50, node_color="red")
+
+    plt.title("Scale-Free Network (Barabási–Albert Model)")
+    plt.show()
+
