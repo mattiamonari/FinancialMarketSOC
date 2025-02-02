@@ -2,86 +2,126 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 
-def histogram_log_bins(x, x_min=None, x_max=None, num_bins=20, min_hits=1):
+from plots import histogram_log_bins, plot_curve_power_law, plot_curve_exponential
+
+
+__all__ = ["fit_curve_exponential", "fit_curve_power_law"]
+
+def fit_exponential_semilog(xdata, ydata):
     """
-    Generate a histogram with logarithmically spaced bins, normalized by bin width.
-    Returns (bin_counts, bin_centers, total_hits).
-
-    Arguments:
-    ----------
-    x         : 1D array of data (e.g., avalanche sizes)
-    x_min     : minimum value for the histogram (if None, use np.min(x))
-    x_max     : maximum value for the histogram (if None, use np.max(x))
-    num_bins  : how many bins to use (logarithmically spaced)
-    min_hits  : bins with fewer than this number of raw (integer) counts are excluded
-
-    The returned bin_counts are normalized by bin width, so it's effectively
-    a 'density' histogram (counts per unit x).
+    Fit y ~ exp(intercept + slope*x), i.e. ln(y) = intercept + slope*x.
+    Returns (lambda, intercept, slope).
+    slope = -lambda, so lambda = -slope.
     """
-    # 1) Determine min/max if not provided
-    if x_min is None:
-        x_min = np.min(x[x>0])  # ensure we only use positive values for log bins
-    if x_max is None:
-        x_max = np.max(x)
+    # We'll fit ln(y) = slope * xdata + intercept.
+    log_y = np.log(ydata)
+    p, cov = np.polyfit(xdata, log_y, deg=1, cov=True)
+    slope, intercept = p
+    slope_err = np.sqrt(cov[0, 0])
+    intercept_err = np.sqrt(cov[1, 1])
 
-    # 2) Logarithmically spaced bin edges
-    bin_edges = np.logspace(np.log10(x_min), np.log10(x_max), num_bins + 1)
+    lam = -slope
+    lam_err = slope_err
+    return lam, lam_err, intercept, intercept_err
 
-    # 3) Raw histogram counts (integer)
-    raw_counts, _ = np.histogram(x, bins=bin_edges)
-    raw_counts = raw_counts.astype(int)
+def fit_exponential_mle(xdata):
+    """
+    Simple maximum-likelihood estimate for an exponential distribution:
+       lambda_hat = 1 / mean(x).
+    Returns lam, standard error, plus additional info.
+    """
+    # If the data truly follows Exp(lambda), the MLE is 1 / mean(x).
+    lam = 1.0 / np.mean(xdata)
+    # Approx standard error for lam (assuming large sample):
+    #    var(lambda_hat) ~ lam^2 / N
+    # => std = lam / sqrt(N)
+    lam_err = lam / np.sqrt(len(xdata))
+    return lam, lam_err
 
-    # 4) Optional: filter out bins with fewer than min_hits
-    #    We'll build a mask that we apply *after* normalizing so we keep bin centers aligned.
-    keep_mask = (raw_counts >= min_hits)
+def fit_curve_exponential(df, lower_cutoff, upper_cutoff, xlabel, title, name, 
+                          num_of_bins=20, min_hits=1):
+    # ---------------------------------------
+    # 1. Read avalanche duration data
+    # ---------------------------------------
+    df = pd.read_csv("avalanche_durations_first.csv")
+    durations = df.values
+    durations = durations[durations > 0]  # ensure positivity
 
-    # 5) Convert raw counts to 'density' by dividing by bin width
-    #    bin_width[i] = bin_edges[i+1] - bin_edges[i]
-    bin_counts = raw_counts.astype(float)
-    bin_widths = bin_edges[1:] - bin_edges[:-1]
-    bin_counts = bin_counts / bin_widths
+    # ---------------------------------------
+    # 2. Build a log-binned histogram
+    # ---------------------------------------
+    counts, bin_centers, edges = histogram_log_bins(
+        durations,
+        x_min=None,
+        x_max=None,
+        num_of_bins=num_of_bins,
+        min_hits=min_hits
+    )
+    
+    # Filter out zero counts if they remain
+    mask_pos = (counts > 0)
+    counts = counts[mask_pos]
+    bin_centers = bin_centers[mask_pos]
 
-    # 6) Total hits (just sum of raw counts)
-    total_hits = np.sum(raw_counts)
+    # ---------------------------------------
+    # 3. Fit the exponential tail
+    #    Option A: Semilog fit on the bin-centers
+    # ---------------------------------------
+    # We'll do ln(counts) = intercept + slope * (bin_center),
+    # slope = -lambda => lambda = -slope
+    # But keep in mind these are "binned" data, so it's approximate.
+    
+    # Possibly define a cutoff if you only want the tail:
+    mask_fit = (bin_centers >= lower_cutoff) & (bin_centers <= upper_cutoff)
+    
+    x_fit = bin_centers[mask_fit]
+    y_fit = counts[mask_fit]
+    
+    lam_fit, lam_fit_err, intercept, intercept_err = fit_exponential_semilog(x_fit, y_fit)
+    print("[Semilog Fit on Binned Data]")
+    print(f"  lambda = {lam_fit:.4f} ± {lam_fit_err:.4f}")
+    print(f"  intercept = {intercept:.4f} ± {intercept_err:.4f}")
+    
+    # ---------------------------------------
+    # 4. (Optional) MLE approach on raw data (often more accurate)
+    # ---------------------------------------
+    lam_mle, lam_mle_err = fit_exponential_mle(durations[durations >= lower_cutoff])
+    print("[MLE on Raw Data]")
+    print(f"  lambda = {lam_mle:.4f} ± {lam_mle_err:.4f}")
 
-    # 7) For log-spaced bins, a common approach is to take the bin center
-    #    as the geometric mean of edges: sqrt(edge[i] * edge[i+1])
-    bin_centers = np.sqrt(bin_edges[:-1] * bin_edges[1:])
+    # ---------------------------------------
+    # 5. Generate the best-fit exponential for plotting
+    #    We'll use the semilog-fit result for demonstration
+    # ---------------------------------------
+    # y = exp(intercept + slope*x)
+    # slope = -lam_fit
+    slope = -lam_fit
+    
+    # We'll just plot from the minimal x_fit to the maximal
+    x_plot = np.logspace(np.log10(x_fit.min()), np.log10(x_fit.max()), 200)
+    y_plot = np.exp(intercept + slope * x_plot)
 
-    # 8) Apply the keep_mask for bins that had enough counts
-    bin_counts = bin_counts[keep_mask]
-    bin_centers = bin_centers[keep_mask]
+    # ---------------------------------------
+    # 6. Plot in log–log space
+    #    Even though it's an exponential, we can do it
+    # ---------------------------------------
+    plot_curve_exponential(x_fit, y_fit, x_plot, y_plot, bin_centers, counts, 
+                           lam_fit, lam_fit_err, xlabel, title, savefig=True, 
+                           name=name)
 
-    return bin_counts, bin_centers, total_hits
 
-def main():
+def fit_curve_power_law(df, lower_cutoff, upper_cutoff, xlabel, title, name,
+                        num_of_bins=20, min_hits=1):
     # ------------------------------------------------------------------------
-    # A) MERGE AVALANCHE-SIZE DATA FROM TWO CSV FILES
-    # ------------------------------------------------------------------------
-    #  Adjust to your actual filenames/column names
-    df1 = pd.read_csv("avalanche_durations_first.csv")        # or header=None, if no headers
-    df2 = pd.read_csv("avalanche_intertimes_second.csv")  # or header=None
-
-    # If these files each have a column named "avalanche_size", do:
-    avalanche_sizes_1 = df1.values
-    avalanche_sizes_2 = df2.values
-
-    # Merge (append) them into one array:
-    avalanche_sizes = np.concatenate([avalanche_sizes_1, avalanche_sizes_2])
-
-    # Optional: filter out zero/negative values if that makes no physical sense:
-    avalanche_sizes = avalanche_sizes[avalanche_sizes > 0]
-
-    # ------------------------------------------------------------------------
-    # B) BUILD THE LOGARITHMIC HISTOGRAM
+    # A) BUILD THE LOGARITHMIC HISTOGRAM
     # ------------------------------------------------------------------------
     # Adjust parameters as needed
     counts, bin_centers, total_hits = histogram_log_bins(
-        x=avalanche_sizes,
+        x=df,
         x_min=None,      # or a specific positive float
         x_max=None,      # or a specific float < max of data
-        num_bins=20,
-        min_hits=1
+        num_of_bins=num_of_bins,
+        min_hits=min_hits
     )
 
     # Remove any zero counts or zero bin-centers to avoid log(0)
@@ -89,24 +129,22 @@ def main():
     counts = counts[valid_mask]
     bin_centers = bin_centers[valid_mask]
     # ------------------------------------------------------------------------
-    # C) CONVERT TO LOG-LOG SPACE
+    # B) CONVERT TO LOG-LOG SPACE
     # ------------------------------------------------------------------------
     log_x = np.log10(bin_centers)
     log_y = np.log10(counts)
 
     # ------------------------------------------------------------------------
-    # D) DEFINE LOWER AND UPPER CUTOFFS FOR FITTING
+    # C) DEFINE LOWER AND UPPER CUTOFFS FOR FITTING
     # ------------------------------------------------------------------------
     #  We only fit the region x_cutoff_lower <= x <= x_cutoff_upper
-    x_cutoff_lower = .08
-    x_cutoff_upper = 6000.0
 
-    fit_mask = (bin_centers >= x_cutoff_lower) & (bin_centers <= x_cutoff_upper)
+    fit_mask = (bin_centers >= lower_cutoff) & (bin_centers <= upper_cutoff)
     fit_log_x = log_x[fit_mask]
     fit_log_y = log_y[fit_mask]
 
     # ------------------------------------------------------------------------
-    # E) LINEAR FIT IN LOG-LOG SPACE WITH ERROR ESTIMATES
+    # D) LINEAR FIT IN LOG-LOG SPACE WITH ERROR ESTIMATES
     #    np.polyfit(..., cov=True) -> returns (coeffs, covariance_matrix)
     # ------------------------------------------------------------------------
     p, cov = np.polyfit(fit_log_x, fit_log_y, deg=1, cov=True)
@@ -121,7 +159,7 @@ def main():
     alpha_err = m_err  # same magnitude, just negative sign
 
     # ------------------------------------------------------------------------
-    # F) GENERATE SMOOTH LINE FOR PLOTTING THE FIT
+    # E) GENERATE SMOOTH LINE FOR PLOTTING THE FIT
     # ------------------------------------------------------------------------
     log_x_min = fit_log_x.min()
     log_x_max = fit_log_x.max()
@@ -129,40 +167,15 @@ def main():
     y_fit_line = 10 ** (m * np.log10(x_fit_line) + c)
 
     # ------------------------------------------------------------------------
-    # G) PLOT THE DATA & THE FIT
+    # F) PLOT THE DATA & THE FIT
     # ------------------------------------------------------------------------
-    plt.figure(figsize=(8, 6))
-
-    # 1) Plot all data (log-binned)
-    plt.scatter(
-        bin_centers, counts,
-        color='blue', s=30, label='Log-binned Data'
-    )
-
-    # 2) Highlight the portion used for fitting
-    plt.scatter(
-        bin_centers[fit_mask], counts[fit_mask],
-        color='orange', edgecolors='k', s=60, zorder=3, label='Points used for fit'
-    )
-
-    # 3) Plot the best-fit line
-    label_fit = (
-        f'alpha = {alpha:.3f}±{alpha_err:.3f}'
-    )
-    plt.plot(x_fit_line, y_fit_line, 'r--', label=label_fit)
-
-    # Log scales
-    plt.xscale('log')
-    plt.yscale('log')
-    plt.xlabel("Time Between Avalanches (timesteps)")
-    plt.ylabel("Density (counts / bin width)")
-    plt.title("Log-Binned Avalanche In-Between Times")
-    plt.legend()
-    plt.tight_layout()
-    plt.show()
+    plot_curve_power_law(x_fit_line, y_fit_line, bin_centers, counts, fit_mask, 
+                         alpha, alpha_err, xlabel, title, savefig=True, 
+                         name=name)
+    
 
     # ------------------------------------------------------------------------
-    # H) PRINT OUT THE FIT RESULTS
+    # G) PRINT OUT THE FIT RESULTS
     # ------------------------------------------------------------------------
     print("="*60)
     print(" FIT RESULTS")
@@ -174,5 +187,60 @@ def main():
     print("="*60)
 
 
+
+
 if __name__ == "__main__":
-    main()
+    df1 = pd.read_csv("avalanche_intertimes_first.csv")        # or header=None, if no headers
+    df2 = pd.read_csv("avalanche_intertimes_second.csv")  # or header=None
+
+    # If these files each have a column named "avalanche_size", do:
+    intertimes_1 = df1.values
+    intertimes_2 = df2.values
+
+    # Merge (append) them into one array:
+    intertimes = np.concatenate([intertimes_1, intertimes_2])
+
+    # Optional: filter out zero/negative values if that makes no physical sense:
+    intertimes = intertimes[intertimes > 0]
+
+
+    fit_curve_power_law(intertimes, lower_cutoff=0.08, upper_cutoff=6000.0, 
+                        xlabel="Time Between Avalanches (timesteps)",
+                        title="Log-Binned Avalanche In-Between Times",
+                        name="avalanche_intertimes")
+    
+    df1 = pd.read_csv("avalanche_sizes_first.csv")        # or header=None, if no headers
+    df2 = pd.read_csv("avalanche_sizes_second.csv")  # or header=None
+
+    # If these files each have a column named "avalanche_size", do:
+    sizes_1 = df1.values
+    sizes_2 = df2.values
+
+    # Merge (append) them into one array:
+    sizes = np.concatenate([sizes_1, sizes_2])
+
+    # Optional: filter out zero/negative values if that makes no physical sense:
+    sizes = sizes[sizes > 0]
+
+    fit_curve_power_law(sizes, lower_cutoff=0.7, upper_cutoff=30, 
+                          xlabel="Avalanche Sizes $|P_{t+1}-P_t|$",
+                          title="Log-Binned Avalanche Sizes",
+                          name="avalanche_sizes")
+    
+    df1 = pd.read_csv("avalanche_durations_first.csv")        # or header=None, if no headers
+    df2 = pd.read_csv("avalanche_durations_second.csv")  # or header=None
+
+    # If these files each have a column named "avalanche_size", do:
+    durations_1 = df1.values
+    durations_2 = df2.values
+
+    # Merge (append) them into one array:
+    durations = np.concatenate([durations_1, durations_2])
+
+    # Optional: filter out zero/negative values if that makes no physical sense:
+    durations = durations[durations > 0]
+
+    fit_curve_exponential(durations, lower_cutoff=12, upper_cutoff=1e6, 
+                        xlabel="Avalanche Durations (timesteps)",
+                        title="Log-Binned Avalanche Durations",
+                        name="avalanche_durations")
