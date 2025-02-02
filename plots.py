@@ -344,3 +344,66 @@ def draw_3d_network(num_nodes=100, edge_funds=3, random_trader_ratio=0.25):
         fig, _frame_update, init_func=init, interval=50, cache_frame_data=False, frames=90
     )
     ani.save('3d_network.gif', fps=30, dpi=300)
+
+
+def plot_curve_exponential(x_fit, y_fit, x_plot, y_plot, bin_centers, counts, 
+                           lam_fit, lam_fit_err, xlabel, title, savefig=False, 
+                           name=None):
+    plt.figure(figsize=(8, 5))
+
+    # Plot the binned data
+    plt.scatter(bin_centers, counts, s=40, color='blue', label="Log-binned data")
+
+    # Highlight the region we used for the fit
+    plt.scatter(x_fit, y_fit, s=60, color='orange', edgecolor='k',
+                zorder=3, label="Data used for fit")
+
+    # Overlay the exponential fit
+    plt.plot(x_plot, y_plot, 'r--', 
+             label=f"Exponential fit\nlambda={lam_fit:.3f} ± {lam_fit_err:.3f}")
+
+    plt.xscale('log')
+    plt.yscale('log')
+    plt.xlabel(xlabel)
+    plt.ylabel("Density (counts / bin_width, log scale)")
+    plt.title(title)
+    plt.legend()
+    plt.tight_layout()
+    if savefig:
+        plt.savefig(f"Images/{name}.pdf")
+    plt.show()
+
+
+def plot_curve_power_law(x_fit_line, y_fit_line, bin_centers, counts, fit_mask, 
+                         alpha, alpha_err, xlabel, title, savefig=False, name=None):
+    plt.figure(figsize=(8, 6))
+
+    # 1) Plot all data (log-binned)
+    plt.scatter(
+        bin_centers, counts,
+        color='blue', s=30, label='Log-binned Data'
+    )
+
+    # 2) Highlight the portion used for fitting
+    plt.scatter(
+        bin_centers[fit_mask], counts[fit_mask],
+        color='orange', edgecolors='k', s=60, zorder=3, label='Points used for fit'
+    )
+
+    # 3) Plot the best-fit line
+    label_fit = (
+        f'alpha = {alpha:.3f}±{alpha_err:.3f}'
+    )
+    plt.plot(x_fit_line, y_fit_line, 'r--', label=label_fit)
+
+    # Log scales
+    plt.xscale('log')
+    plt.yscale('log')
+    plt.xlabel(xlabel)
+    plt.ylabel("Density (counts / bin width)")
+    plt.title(title)
+    plt.legend()
+    plt.tight_layout()
+    if savefig:
+        plt.savefig(f"Images/{name}.pdf")
+    plt.show()
