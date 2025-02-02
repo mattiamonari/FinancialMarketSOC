@@ -2,13 +2,16 @@ import multiprocessing as mp
 import numpy as np
 import networkx as nx
 import pywt
-import powerlaw
+import sys
 from scipy.stats import norm, kurtosis, skew
 from scipy.ndimage import label
 from tqdm import tqdm
 import matplotlib.pyplot as plt
 from wavelet import *
 from plots import *
+from market_statistics import *
+from stylised_facts import *
+import pandas as pd
 
 
 # ------------------------------
@@ -20,53 +23,19 @@ RANDOM_TRADER_RATIO = 0.25
 ALPHA = 0.7
 BETA = 0.3
 GAMMA = 1
-ETA = 0.01
+ETA = 0.15
+AVALANCHE_THRESHOLD = 0.01
+C = 3
 
 # Increase TIME_STEPS to gather more data, but note longer runs = longer time
-TIME_STEPS = 10000
+TIME_STEPS = 1000
 
 # Number of simulations to run in parallel
-NUM_SIMULATIONS = 64
 
+NUM_SIMULATIONS = 1
 # Number of parallel processes (often set to CPU threads; 
 # experiment with 8 vs 16 if you have an 8-core/16-thread CPU)
-NUM_PROCESSES = 8 
-
-
-
-
-def histogram_log_bins(x, x_min=None, x_max=None, num_of_bins=20, min_hits=1):
-    """
-    Generate histogram with logarithmically spaced bins.
-    """
-    if not x_min:
-        x_min = np.min(x)
-    if not x_max:
-        x_max = np.max(x)
-
-    # This is the factor that each subsequent bin is larger than the next.
-    growth_factor = (x_max / x_min) ** (1 / (num_of_bins + 1))
-    # Generates logarithmically spaced points from x_min to x_max.
-    bin_edges = np.logspace(np.log10(x_min), np.log10(x_max), num=num_of_bins + 1)
-    # We don't need the second argument (which are again the bin edges).
-    # It's conventional to denote arguments you don't intend to use with _.
-    bin_counts, _ = np.histogram(x, bins=bin_edges)
-    total_hits = np.sum(bin_counts)
-    bin_counts = bin_counts.astype(float)
-
-    # Rescale bin counts by their relative sizes.
-    significant_bins = []
-    for bin_index in range(np.size(bin_counts)):
-        if bin_counts[bin_index] >= min_hits:
-            significant_bins.append(bin_index)
-
-        bin_counts[bin_index] = bin_counts[bin_index] / (growth_factor ** bin_index)
-
-    # Is there a better way to get the center of a bin on logarithmic axis? There probably is, please figure it out.
-    bin_centers = (bin_edges[:-1] + bin_edges[1:]) / 2.
-
-    # You can optionally rescale the counts by total_hits if you want to get a density.
-    return bin_counts[significant_bins], bin_centers[significant_bins], total_hits
+NUM_PROCESSES = 1
 
 
 # ------------------------------
@@ -106,10 +75,10 @@ def run_single_simulation(sim_id):
         G.nodes[node]['position'] = 'buy' if np.random.random() < 0.5 else 'sell'
 
     # 3. Initialize market price and containers
-    price = 0
+    price = 100
     prices = [price]
-    returns = []
-    log_returns = []
+    num_buyers = []
+    num_sellers = []
 
     # 4. Define update functions
     def update_positions(t):
@@ -138,6 +107,14 @@ def run_single_simulation(sim_id):
 
     def update_price(t):
         nonlocal price
+        nonlocal num_buyers
+        nonlocal num_sellers
+        buyers = sum(1 for node in G.nodes if G.nodes[node]['position'] == 'buy')
+        sellers = sum(1 for node in G.nodes if G.nodes[node]['position'] == 'sell')
+   
+        num_buyers.append(buyers)
+        num_sellers.append(sellers)
+
         buy_volume = sum(G.nodes[node]['trade_size'] 
                          for node in G.nodes if G.nodes[node]['position'] == 'buy')
         sell_volume = sum(G.nodes[node]['trade_size'] 
@@ -150,24 +127,31 @@ def run_single_simulation(sim_id):
 
         price += ETA * (buy_volume - sell_volume) * np.random.exponential(1/volume_difference)
         prices.append(price)
-        if t > 1 and prices[-2] != 0:
-            ret = (prices[-1] - prices[-2]) / prices[-2]
-            returns.append(ret)
-            # Log returns
-            if prices[-1] > 0 and prices[-2] > 0:
-                log_returns.append(np.log(prices[-1] / prices[-2]))
-            else:
-                log_returns.append(np.nan)
 
     # 5. Run the simulation
     for t in tqdm(range(1, TIME_STEPS)):
         update_positions(t)
         update_price(t)
 
+    # Computing the moving average of the market price
+    moving_avg = pd.Series(prices).rolling(window=200).mean().to_numpy()
+    print("Market volatility: ", np.std(prices))
+
+    returns = calculate_price_returns(prices)
+    log_returns = calculate_log_returns(prices)
+
     # 6. Clean log_returns
     log_returns = np.array(log_returns)
     mask = np.isfinite(log_returns)
     log_returns = log_returns[mask]
+
+    plot_returns(returns, saveFig=False)
+    plot_returns(returns**2, saveFig=False, squared=True)
+    plot_returns(log_returns, saveFig=False, squared=True, log_returns=True)
+
+    returns_autocorrelation(returns, saveFig=False)
+    returns_autocorrelation(returns**2, saveFig=False, squared=True)
+
 
     # # 7. Wavelet filtering and avalanche extraction
     # C_optimal, filtered_log_returns, residual_signal = tune_threshold(log_returns)
@@ -175,7 +159,6 @@ def run_single_simulation(sim_id):
 
     wavelet = 'db1'	
     level = 4
-    C = 3
     if np.any(log_returns):
         coeffs = pywt.wavedec(log_returns, wavelet=wavelet, level=level)
         filtered_coeffs = filter_wavelet_coefficients_paper(coeffs, C)
@@ -184,7 +167,16 @@ def run_single_simulation(sim_id):
         residual_signal = log_returns - filtered_log_returns
     else:
         return -1
-    avalanche_sizes, avalanche_durations, avalanche_intertimes = extract_avalanches(residual_signal, avalanche_threshold=0.01)
+    avalanche_sizes, avalanche_durations, avalanche_intertimes = extract_avalanches(residual_signal, avalanche_threshold=AVALANCHE_THRESHOLD)
+    labeled_array, num_features = label(np.abs(residual_signal) > AVALANCHE_THRESHOLD)
+
+    plot_avalanches_on_log_returns(log_returns, residual_signal, filtered_log_returns, labeled_array, num_features)
+    plot_original_vs_filtered_log_returns_pdf(log_returns, filtered_log_returns, bins=50, fit_gaussian_filtered = True, saveFig=False)
+
+    plot_market_price(prices, moving_avg, profiler_view=True, saveFig=False, num_features=num_features, labeled_array=labeled_array)
+    ratio = [num_buyers[i] / (num_sellers[i] + num_buyers[i]) for i in range(len(num_buyers))]
+    plot_ratio_buyers_sellers(ratio, profiler_view=True, saveFig=False, num_features=num_features, labeled_array=labeled_array)
+    # plot_weighted_volumes(weighted_volumes, profiler_view=True, saveFig=False)
 
     return {
         'sim_id': sim_id,
@@ -198,6 +190,13 @@ def run_single_simulation(sim_id):
 # PARALLEL EXECUTION MAIN
 # ------------------------------
 def main():
+
+    # Read if use saved data from command line
+    if len(sys.argv) > 1:
+        read_data = True
+    else:
+        read_data = False
+
     # We'll collect results in a list. We'll set chunk_size=1 so that 
     # tqdm can update immediately after each simulation completes.
     with mp.Pool(processes=NUM_PROCESSES) as pool:
@@ -211,16 +210,20 @@ def main():
     all_avalanche_sizes = []
     all_avalanche_durations = []
     all_avalanche_intertimes = []
-    for res in results:
-        all_avalanche_sizes.extend(res['avalanche_sizes'])
-        all_avalanche_durations.extend(res['avalanche_durations'])
-        all_avalanche_intertimes.extend(res['avalanche_intertimes'])
+    if read_data:
+        all_avalanche_sizes = np.genfromtxt('avalanche_sizes.csv', delimiter=',')
+        all_avalanche_durations = np.genfromtxt('avalanche_durations.csv', delimiter=',')
+        all_avalanche_intertimes = np.genfromtxt('avalanche_intertimes.csv', delimiter=',')
+    else :
+        for res in results:
+            all_avalanche_sizes.extend(res['avalanche_sizes'])
+            all_avalanche_durations.extend(res['avalanche_durations'])
+            all_avalanche_intertimes.extend(res['avalanche_intertimes'])
 
-    # save data as csv file
-    np.savetxt('avalanche_sizes.csv', all_avalanche_sizes, delimiter=',')
-    np.savetxt('avalanche_durations.csv', all_avalanche_durations, delimiter=',')
-    np.savetxt('avalanche_intertimes.csv', all_avalanche_intertimes, delimiter=',')
-
+    if not read_data:
+        np.savetxt('avalanche_sizes.csv', all_avalanche_sizes, delimiter=',')
+        np.savetxt('avalanche_durations.csv', all_avalanche_durations, delimiter=',')
+        np.savetxt('avalanche_intertimes.csv', all_avalanche_intertimes, delimiter=',')
     
     all_avalanche_sizes_log_bins = histogram_log_bins(all_avalanche_sizes, num_of_bins=50, min_hits=1)
 
@@ -252,13 +255,6 @@ def main():
     plt.yscale('log')
     plt.show()
 
-
-    
-    # # Plot the aggregated avalanche sizes, get alpha & xmin
-    # alpha, xmin = plot_avalanche_sizes(all_avalanche_sizes)
-
-    # Print them explicitly here as well
-    # print(f"Aggregated Avalanche Sizes -> Power-law fit: alpha = {alpha}, xmin = {xmin}")
 
 if __name__ == "__main__":
     main()

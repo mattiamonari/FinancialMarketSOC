@@ -1,1 +1,6 @@
 __pycache__
+*.csv
+*.png
+*.pdf
+*.gif
+junk.py
