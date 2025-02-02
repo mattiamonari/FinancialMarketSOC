@@ -334,7 +334,8 @@ def plot_curve_exponential(x_fit, y_fit, x_plot, y_plot, bin_centers, counts,
     plt.tight_layout()
     if savefig:
         plt.savefig(f"Images/{name}.pdf")
-    plt.show()
+    else:
+        plt.show()
 
 
 def plot_curve_power_law(x_fit_line, y_fit_line, bin_centers, counts, fit_mask, 
@@ -369,7 +370,8 @@ def plot_curve_power_law(x_fit_line, y_fit_line, bin_centers, counts, fit_mask,
     plt.tight_layout()
     if savefig:
         plt.savefig(f"Images/{name}.pdf")
-    plt.show()
+    else : 
+        plt.show()
 
 def returns_autocorrelation(returns, saveFig=False, squared=False):
     acf_values = acf(returns)

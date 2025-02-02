@@ -176,7 +176,7 @@ def run_single_simulation(saveFig, sim_id):
     avalanche_sizes, avalanche_durations, avalanche_intertimes = extract_avalanches(residual_signal, avalanche_threshold=AVALANCHE_THRESHOLD)
     labeled_array, num_features = label(np.abs(residual_signal) > AVALANCHE_THRESHOLD)
 
-    plot_avalanches_on_log_returns(log_returns, residual_signal, filtered_log_returns, labeled_array, num_features)
+    plot_avalanches_on_log_returns(log_returns, residual_signal, filtered_log_returns, labeled_array, num_features, saveFig=saveFig)
     plot_original_vs_filtered_log_returns_pdf(log_returns, filtered_log_returns, bins=50, fit_gaussian_filtered = True, saveFig=saveFig)
 
     plot_market_price(prices, moving_avg, profiler_view=False, saveFig=saveFig, num_features=num_features, labeled_array=labeled_array)
