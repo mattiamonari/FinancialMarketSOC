@@ -22,7 +22,7 @@ def filter_wavelet_coefficients_paper(coeffs, C):
     return filtered_coeffs
 
 # DEBUG: at the moment this function is not used. We set the parameter C with value 3 because the function 
-# would increment it undefinitely. For future development, we should fix this behavior
+# would increment it undefinitely. For future development, we should fix this behavior.
 def tune_threshold(log_returns, wavelet='db1', level=4, target_kurtosis=3, target_skew=0, tolerance=0.1, max_iter = 1000):
     """
     Dynamically tune the threshold parameter C for wavelet filtering based on kurtosis and skewness. 

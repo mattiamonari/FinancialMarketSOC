@@ -21,7 +21,7 @@ def plot_returns_vs_time(returns, saveFig=False, squared=False):
         plt.title('Squared Price Returns')
     
     if saveFig:
-        plt.savefig('returns_vs_time' + ('_squared_' if squared else '') + '.pdf')
+        plt.savefig('images/returns_vs_time' + ('_squared_' if squared else '') + '.pdf')
         plt.cla()
     else:
         plt.show()
@@ -47,7 +47,7 @@ def plot_returns_distribution(returns, fitted_dist=False, saveFig=False, log_ret
     plt.title(title)
 
     if saveFig:
-        plt.savefig('returns_distribution.pdf')
+        plt.savefig('images/' + ('log_' if log_returns else '') + ('squared_' if squared else '') + 'returns_distribution.pdf')
         plt.cla()
     else:
         plt.show()
@@ -76,7 +76,7 @@ def plot_market_price(prices, moving_avg, profiler_view=False, saveFig=False, nu
     plt.legend()
 
     if saveFig:
-        plt.savefig('market_price.pdf')
+        plt.savefig('images/market_price.pdf')
         plt.cla()
     elif not profiler_view:
         plt.show()
@@ -101,7 +101,7 @@ def plot_ratio_buyers_sellers(ratio, profiler_view=False, saveFig=False,  num_fe
     plt.tight_layout()
 
     if saveFig:
-        plt.savefig('ratio_buyers_sellers.pdf')
+        plt.savefig('images/ratio_buyers_sellers.pdf')
         plt.cla()
     elif not profiler_view:
         plt.show()
@@ -118,7 +118,7 @@ def plot_weighted_volumes(weighted_volumes, profiler_view=False, saveFig=False):
     plt.ylabel('Volumes Proportion (Buy)')
     
     if saveFig:
-        plt.savefig('weighted_volumes.pdf')
+        plt.savefig('images/weighted_volumes.pdf')
         plt.cla()
     else: # In this case since this is the last plot we show it even if profileview is True
         plt.show()
@@ -148,7 +148,7 @@ def plot_original_vs_filtered_log_returns_pdf(log_returns, filtered_log_returns,
     plt.grid(alpha=0.3)
 
     if saveFig:
-        plt.savefig('original_vs_filtered_log_returns.pdf')
+        plt.savefig('images/original_vs_filtered_log_returns.pdf')
         plt.cla()
     else:
         plt.show()
@@ -167,48 +167,10 @@ def plot_avalanches_on_log_returns(log_returns, residual_signal, filtered_log_re
     plt.ylabel("Log Returns")
 
     if saveFig:
-        plt.savefig('avalanches_on_log_returns.pdf')
+        plt.savefig('images/avalanches_on_log_returns.pdf')
         plt.cla()
     else:
         plt.show()  
-
-def plot_avalanche_sizes(avalanche_sizes):
-    """
-    Fits the provided avalanche_sizes to a power-law model and plots
-    the empirical distribution (PDF) as points (scatter) and the fitted 
-    power-law as a solid line.
-    Returns (alpha, xmin) and also prints them.
-    """
-    # Perform the fit
-    fit = powerlaw.Fit(avalanche_sizes)
-    alpha = fit.alpha
-    xmin = fit.xmin
-    
-    # Plot PDF of empirical data as points (no lines)
-    fig_pdf = fit.plot_pdf(
-        marker='o',      # Use circle markers
-        linestyle='none',# No line connecting points
-        color='b',
-        label='Empirical Data'
-    )
-    
-    # Plot the power-law fit as a solid line
-    fit.power_law.plot_pdf(
-        ax=fig_pdf,
-        color='r',
-        linestyle='-',    # Solid line
-        linewidth=2,
-        label='Power-Law Fit'
-    )
-
-    plt.title("Avalanche Size Distribution (Power-Law Fit)")
-    plt.xlabel("Avalanche Size")
-    plt.ylabel("Probability Density")
-    plt.legend()
-    plt.show()
-
-    print(f"Power-law alpha: {alpha}, xmin: {xmin}")
-    return alpha, xmin
 
 def histogram_log_bins(x, x_min=None, x_max=None, num_of_bins=20, min_hits=1):
     """
@@ -343,4 +305,4 @@ def draw_3d_network(num_nodes=100, edge_funds=3, random_trader_ratio=0.25):
     ani = animation.FuncAnimation(
         fig, _frame_update, init_func=init, interval=50, cache_frame_data=False, frames=90
     )
-    ani.save('3d_network.gif', fps=30, dpi=300)
+    ani.save('Images/3d_network.gif', fps=30, dpi=300)
