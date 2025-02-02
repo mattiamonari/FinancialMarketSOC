@@ -207,6 +207,7 @@ def main():
     # Read if use saved data from command line
     # Read number of simulations and processes
     print(len(sys.argv))
+    print(sys.argv)
     if len(sys.argv) == 2:
         read_data = bool(int(sys.argv[1]))
     if len(sys.argv) == 5:

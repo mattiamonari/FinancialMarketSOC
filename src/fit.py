@@ -38,10 +38,9 @@ def fit_exponential_mle(xdata):
     lam_err = lam / np.sqrt(len(xdata))
     return lam, lam_err
 
-def fit_curve_exponential(df, lower_cutoff, upper_cutoff, xlabel, title, name, 
+def fit_curve_exponential(durations, lower_cutoff, upper_cutoff, xlabel, title, name, 
                           num_of_bins=20, min_hits=1):
 
-    durations = df.values
     # ---------------------------------------
     # 2. Build a log-binned histogram
     # ---------------------------------------
