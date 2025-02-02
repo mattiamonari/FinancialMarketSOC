@@ -10,7 +10,6 @@ from fit import *
 from wavelet import *
 from plots import *
 from market_statistics import *
-from stylised_facts import *
 import pandas as pd
 
 
@@ -62,6 +61,58 @@ def initialize_network():
 
     return G
 
+G = initialize_network()
+
+
+def update_positions(t):
+    for node in G.nodes:
+        neighbors = list(G.neighbors(node))
+        if G.nodes[node]['type'] == 'hedge_fund':
+            profit = np.random.uniform(0,1)
+            # Switch position if profit threshold is exceeded
+            if np.random.rand() < 1 / (1 + np.exp(- (GAMMA * (profit - G.nodes[node]['profit_threshold'])))):
+                G.nodes[node]['position'] = (
+                    'buy' if G.nodes[node]['position'] == 'sell' else 'sell'
+                )
+                G.nodes[node]['last_update_time'] = t
+
+        elif G.nodes[node]['type'] == 'trader':
+            for neighbor in neighbors:
+                influence = ALPHA * G.nodes[neighbor]['trade_size'] / 10 + BETA * len(neighbors)
+                if np.random.rand() < influence and G.nodes[node]['last_update_time'] < t:
+                    G.nodes[node]['position'] = G.nodes[neighbor]['position']
+                    G.nodes[node]['last_update_time'] = t
+
+        elif G.nodes[node]['type'] == 'random_trader':
+            G.nodes[node]['position'] = 'buy' if np.random.rand() < 0.5 else 'sell'
+            G.nodes[node]['last_update_time'] = t
+
+
+def update_price(prices, num_buyers, num_sellers):
+
+        price = prices[-1]
+        
+        buyers = sum(1 for node in G.nodes if G.nodes[node]['position'] == 'buy')
+        sellers = sum(1 for node in G.nodes if G.nodes[node]['position'] == 'sell')
+   
+        num_buyers.append(buyers)
+        num_sellers.append(sellers)
+
+        buy_volume = sum(G.nodes[node]['trade_size'] 
+                         for node in G.nodes if G.nodes[node]['position'] == 'buy')
+        sell_volume = sum(G.nodes[node]['trade_size'] 
+                          for node in G.nodes if G.nodes[node]['position'] == 'sell')
+        volume_difference = abs(buy_volume - sell_volume)
+
+        # Avoid dividing by zero if volume_difference = 0
+        if volume_difference == 0:
+            volume_difference = 1
+
+        price += ETA * (buy_volume - sell_volume) * np.random.exponential(1/volume_difference)
+        prices.append(price)
+
+        return prices, num_buyers, num_sellers
+
 
 # ------------------------------
 # SINGLE SIMULATION FUNCTION
@@ -81,57 +132,11 @@ def run_single_simulation(G, sim_id):
     num_sellers = []
 
     # 4. Define update functions
-    def update_positions(t):
-        nonlocal price
-        for node in G.nodes:
-            neighbors = list(G.neighbors(node))
-            if G.nodes[node]['type'] == 'hedge_fund':
-                profit = np.random.uniform(0,1)
-                # Switch position if profit threshold is exceeded
-                if np.random.rand() < 1 / (1 + np.exp(- (GAMMA * (profit - G.nodes[node]['profit_threshold'])))):
-                    G.nodes[node]['position'] = (
-                        'buy' if G.nodes[node]['position'] == 'sell' else 'sell'
-                    )
-                    G.nodes[node]['last_update_time'] = t
-
-            elif G.nodes[node]['type'] == 'trader':
-                for neighbor in neighbors:
-                    influence = ALPHA * G.nodes[neighbor]['trade_size'] / 10 + BETA * len(neighbors)
-                    if np.random.rand() < influence and G.nodes[node]['last_update_time'] < t:
-                        G.nodes[node]['position'] = G.nodes[neighbor]['position']
-                        G.nodes[node]['last_update_time'] = t
-
-            elif G.nodes[node]['type'] == 'random_trader':
-                G.nodes[node]['position'] = 'buy' if np.random.rand() < 0.5 else 'sell'
-                G.nodes[node]['last_update_time'] = t
-
-    def update_price(t):
-        nonlocal price
-        nonlocal num_buyers
-        nonlocal num_sellers
-        buyers = sum(1 for node in G.nodes if G.nodes[node]['position'] == 'buy')
-        sellers = sum(1 for node in G.nodes if G.nodes[node]['position'] == 'sell')
-   
-        num_buyers.append(buyers)
-        num_sellers.append(sellers)
-
-        buy_volume = sum(G.nodes[node]['trade_size'] 
-                         for node in G.nodes if G.nodes[node]['position'] == 'buy')
-        sell_volume = sum(G.nodes[node]['trade_size'] 
-                          for node in G.nodes if G.nodes[node]['position'] == 'sell')
-        volume_difference = abs(buy_volume - sell_volume)
-
-        # Avoid dividing by zero if volume_difference = 0
-        if volume_difference == 0:
-            return
-
-        price += ETA * (buy_volume - sell_volume) * np.random.exponential(1/volume_difference)
-        prices.append(price)
 
     # 5. Run the simulation
     for t in tqdm(range(1, TIME_STEPS)):
         update_positions(t)
-        update_price(t)
+        prices, num_buyers, num_sellers = update_price(prices, num_buyers, num_sellers)
 
     # Computing the moving average of the market price
     moving_avg = pd.Series(prices).rolling(window=200).mean().to_numpy()
@@ -191,7 +196,7 @@ def run_single_simulation(G, sim_id):
 # ------------------------------
 def main():
 
-    G = initialize_network()
+    global G
 
     # Read if use saved data from command line
     # Read number of simulations and processes
