@@ -388,7 +388,7 @@ def returns_autocorrelation(returns, saveFig=False, squared=False):
         plt.title('Squared Returns Autocorrelation')
 
     if saveFig:
-        plt.savefig('returns_autocorrelation' + ('_squared_' if squared else '') + '.pdf')
+        plt.savefig('images/returns_autocorrelation' + ('_squared_' if squared else '') + '.pdf')
         plt.cla()
     else:
         plt.show()
