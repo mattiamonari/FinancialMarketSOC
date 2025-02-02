@@ -2,14 +2,15 @@ import matplotlib.pyplot as plt
 import numpy as np
 from wavelet import compute_pdf
 from scipy.stats import norm
+from statsmodels.tsa.stattools import acf
 import powerlaw
 import networkx as nx
 from matplotlib import animation
 
 
 __all__ = ['plot_returns', 'plot_market_price', 'plot_ratio_buyers_sellers', 'plot_weighted_volumes', 'plot_returns_vs_time', 
-           'plot_returns_distribution', 'plot_original_vs_filtered_log_returns_pdf', 'plot_avalanches_on_log_returns', 'plot_avalanche_sizes',
-           'histogram_log_bins', 'draw_3d_network']
+           'plot_returns_distribution', 'plot_original_vs_filtered_log_returns_pdf', 'plot_avalanches_on_log_returns',
+           'histogram_log_bins', 'draw_3d_network', 'returns_autocorrelation']
 
 def plot_returns_vs_time(returns, saveFig=False, squared=False):
     plt.plot(returns)
@@ -369,3 +370,23 @@ def plot_curve_power_law(x_fit_line, y_fit_line, bin_centers, counts, fit_mask,
     if savefig:
         plt.savefig(f"Images/{name}.pdf")
     plt.show()
+
+def returns_autocorrelation(returns, saveFig=False, squared=False):
+    acf_values = acf(returns)
+
+    plt.stem(acf_values)
+    plt.axhline(y=-1.96 / np.sqrt(5000), color='blue', linestyle='--', label='C.I.')
+    plt.axhline(y= 1.96 / np.sqrt(5000), color='blue', linestyle='--', label='C.I.')
+    
+    plt.xlabel('Lag')
+    plt.ylabel('Autocorrelation')
+    plt.title('Returns Autocorrelation')
+
+    if squared:
+        plt.title('Squared Returns Autocorrelation')
+
+    if saveFig:
+        plt.savefig('returns_autocorrelation' + ('_squared_' if squared else '') + '.pdf')
+        plt.cla()
+    else:
+        plt.show()

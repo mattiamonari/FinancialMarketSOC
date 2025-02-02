@@ -3,10 +3,10 @@ import numpy as np
 import networkx as nx
 import pywt
 import sys
-from scipy.stats import norm, kurtosis, skew
 from scipy.ndimage import label
 from tqdm import tqdm
 import matplotlib.pyplot as plt
+from fit import *
 from wavelet import *
 from plots import *
 from market_statistics import *
@@ -26,6 +26,10 @@ GAMMA = 1
 ETA = 0.15
 AVALANCHE_THRESHOLD = 0.01
 C = 3
+HF_TRADE_LOWER = 1
+HF_TRADE_UPPER = 2
+TR_TRADE_LOWER = 0.2
+TR_TRADE_UPPER = 0.6
 
 # Increase TIME_STEPS to gather more data, but note longer runs = longer time
 TIME_STEPS = 1000
@@ -62,10 +66,10 @@ def run_single_simulation(sim_id):
         if node < NUM_HEDGE_FUNDS:
             G.nodes[node]['type'] = 'hedge_fund'
             G.nodes[node]['profit_threshold'] = np.random.normal(0.3, 0.1)
-            G.nodes[node]['trade_size'] = np.random.uniform(1, 2)
+            G.nodes[node]['trade_size'] = np.random.uniform(HF_TRADE_LOWER, HF_TRADE_UPPER)
         elif node in random_trader_indices:
             G.nodes[node]['type'] = 'random_trader'
-            G.nodes[node]['trade_size'] = np.random.uniform(0.2, 0.6)
+            G.nodes[node]['trade_size'] = np.random.uniform(TR_TRADE_LOWER, TR_TRADE_UPPER)
         else:
             G.nodes[node]['type'] = 'trader'
             G.nodes[node]['profit_threshold'] = np.random.normal(0.3, 0.1)
@@ -211,9 +215,9 @@ def main():
     all_avalanche_durations = []
     all_avalanche_intertimes = []
     if read_data:
-        all_avalanche_sizes = np.genfromtxt('avalanche_sizes.csv', delimiter=',')
-        all_avalanche_durations = np.genfromtxt('avalanche_durations.csv', delimiter=',')
-        all_avalanche_intertimes = np.genfromtxt('avalanche_intertimes.csv', delimiter=',')
+        all_avalanche_sizes = np.genfromtxt('csv/example_avalanche_sizes.csv', delimiter=',')
+        all_avalanche_durations = np.genfromtxt('csv/example_avalanche_durations.csv', delimiter=',')
+        all_avalanche_intertimes = np.genfromtxt('csv/example_avalanche_intertimes.csv', delimiter=',')
     else :
         for res in results:
             all_avalanche_sizes.extend(res['avalanche_sizes'])
@@ -221,39 +225,30 @@ def main():
             all_avalanche_intertimes.extend(res['avalanche_intertimes'])
 
     if not read_data:
-        np.savetxt('avalanche_sizes.csv', all_avalanche_sizes, delimiter=',')
-        np.savetxt('avalanche_durations.csv', all_avalanche_durations, delimiter=',')
-        np.savetxt('avalanche_intertimes.csv', all_avalanche_intertimes, delimiter=',')
+        np.savetxt('csv/avalanche_sizes.csv', all_avalanche_sizes, delimiter=',')
+        np.savetxt('csv/avalanche_durations.csv', all_avalanche_durations, delimiter=',')
+        np.savetxt('csv/avalanche_intertimes.csv', all_avalanche_intertimes, delimiter=',')   
     
-    all_avalanche_sizes_log_bins = histogram_log_bins(all_avalanche_sizes, num_of_bins=50, min_hits=1)
+    # Optional: filter out zero/negative values if that makes no physical sense:
+    all_avalanche_sizes = all_avalanche_sizes[all_avalanche_sizes > 0]
+    all_avalanche_durations = all_avalanche_durations[all_avalanche_durations > 0]
+    all_avalanche_intertimes = all_avalanche_intertimes[all_avalanche_intertimes > 0]
 
-    plt.scatter(all_avalanche_sizes_log_bins[1], all_avalanche_sizes_log_bins[0] / all_avalanche_sizes_log_bins[2])
-    plt.xlabel('Avalanche Size')
-    plt.ylabel('Frequency')
-    plt.title('Avalanche Size Distribution')   
-    plt.xscale('log')
-    plt.yscale('log')
-    plt.show()
+    fit_curve_power_law(all_avalanche_sizes, lower_cutoff=0.7, upper_cutoff=30, 
+                          xlabel="Avalanche Sizes $|P_{t+1}-P_t|$",
+                          title="Log-Binned Avalanche Sizes",
+                          name="avalanche_sizes")
+    
 
-    all_avalanche_durations_log_bins = histogram_log_bins(all_avalanche_durations, num_of_bins=50, min_hits=1)
+    fit_curve_exponential(all_avalanche_durations, lower_cutoff=12, upper_cutoff=1e6, 
+                        xlabel="Avalanche Durations (timesteps)",
+                        title="Log-Binned Avalanche Durations",
+                        name="avalanche_durations")
 
-    plt.scatter(all_avalanche_durations_log_bins[1], all_avalanche_durations_log_bins[0] / all_avalanche_durations_log_bins[2])
-    plt.xlabel('Avalanche duration')
-    plt.ylabel('Frequency')
-    plt.title('Avalanche Duration Distribution')   
-    plt.xscale('log')
-    plt.yscale('log')
-    plt.show()
-
-    all_avalanche_intertimes_log_bins = histogram_log_bins(all_avalanche_intertimes, num_of_bins=50, min_hits=1)
-
-    plt.scatter(all_avalanche_intertimes_log_bins[1], all_avalanche_intertimes_log_bins[0] / all_avalanche_intertimes_log_bins[2])
-    plt.xlabel('Avalanche inbetween times')
-    plt.ylabel('Frequency')
-    plt.title('Avalanche Inbetween Times Distribution')   
-    plt.xscale('log')
-    plt.yscale('log')
-    plt.show()
+    fit_curve_power_law(all_avalanche_intertimes, lower_cutoff=0.08, upper_cutoff=6000.0, 
+                        xlabel="Time Between Avalanches (timesteps)",
+                        title="Log-Binned Avalanche In-Between Times",
+                        name="avalanche_intertimes")
 
 
 if __name__ == "__main__":
