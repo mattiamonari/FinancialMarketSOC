@@ -40,13 +40,8 @@ def fit_exponential_mle(xdata):
 
 def fit_curve_exponential(df, lower_cutoff, upper_cutoff, xlabel, title, name, 
                           num_of_bins=20, min_hits=1):
-    # ---------------------------------------
-    # 1. Read avalanche duration data
-    # ---------------------------------------
-    df = pd.read_csv("avalanche_durations_first.csv")
-    durations = df.values
-    durations = durations[durations > 0]  # ensure positivity
 
+    durations = df.values
     # ---------------------------------------
     # 2. Build a log-binned histogram
     # ---------------------------------------
@@ -187,60 +182,3 @@ def fit_curve_power_law(df, lower_cutoff, upper_cutoff, xlabel, title, name,
     print("="*60)
 
 
-
-
-if __name__ == "__main__":
-    df1 = pd.read_csv("avalanche_intertimes_first.csv")        # or header=None, if no headers
-    df2 = pd.read_csv("avalanche_intertimes_second.csv")  # or header=None
-
-    # If these files each have a column named "avalanche_size", do:
-    intertimes_1 = df1.values
-    intertimes_2 = df2.values
-
-    # Merge (append) them into one array:
-    intertimes = np.concatenate([intertimes_1, intertimes_2])
-
-    # Optional: filter out zero/negative values if that makes no physical sense:
-    intertimes = intertimes[intertimes > 0]
-
-
-    fit_curve_power_law(intertimes, lower_cutoff=0.08, upper_cutoff=6000.0, 
-                        xlabel="Time Between Avalanches (timesteps)",
-                        title="Log-Binned Avalanche In-Between Times",
-                        name="avalanche_intertimes")
-    
-    df1 = pd.read_csv("avalanche_sizes_first.csv")        # or header=None, if no headers
-    df2 = pd.read_csv("avalanche_sizes_second.csv")  # or header=None
-
-    # If these files each have a column named "avalanche_size", do:
-    sizes_1 = df1.values
-    sizes_2 = df2.values
-
-    # Merge (append) them into one array:
-    sizes = np.concatenate([sizes_1, sizes_2])
-
-    # Optional: filter out zero/negative values if that makes no physical sense:
-    sizes = sizes[sizes > 0]
-
-    fit_curve_power_law(sizes, lower_cutoff=0.7, upper_cutoff=30, 
-                          xlabel="Avalanche Sizes $|P_{t+1}-P_t|$",
-                          title="Log-Binned Avalanche Sizes",
-                          name="avalanche_sizes")
-    
-    df1 = pd.read_csv("avalanche_durations_first.csv")        # or header=None, if no headers
-    df2 = pd.read_csv("avalanche_durations_second.csv")  # or header=None
-
-    # If these files each have a column named "avalanche_size", do:
-    durations_1 = df1.values
-    durations_2 = df2.values
-
-    # Merge (append) them into one array:
-    durations = np.concatenate([durations_1, durations_2])
-
-    # Optional: filter out zero/negative values if that makes no physical sense:
-    durations = durations[durations > 0]
-
-    fit_curve_exponential(durations, lower_cutoff=12, upper_cutoff=1e6, 
-                        xlabel="Avalanche Durations (timesteps)",
-                        title="Log-Binned Avalanche Durations",
-                        name="avalanche_durations")

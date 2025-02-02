@@ -202,6 +202,7 @@ def wrapper(args):
 def main():
 
     global G
+    global saveFig
 
     # Read if use saved data from command line
     # Read number of simulations and processes
