@@ -39,7 +39,7 @@ def fit_exponential_mle(xdata):
     return lam, lam_err
 
 def fit_curve_exponential(durations, lower_cutoff, upper_cutoff, xlabel, title, name, 
-                          num_of_bins=20, min_hits=1):
+                          num_of_bins=20, min_hits=1, saveFig=False):
 
     # ---------------------------------------
     # 2. Build a log-binned histogram
@@ -100,12 +100,12 @@ def fit_curve_exponential(durations, lower_cutoff, upper_cutoff, xlabel, title, 
     #    Even though it's an exponential, we can do it
     # ---------------------------------------
     plot_curve_exponential(x_fit, y_fit, x_plot, y_plot, bin_centers, counts, 
-                           lam_fit, lam_fit_err, xlabel, title, savefig=True, 
+                           lam_fit, lam_fit_err, xlabel, title, savefig=saveFig, 
                            name=name)
 
 
 def fit_curve_power_law(df, lower_cutoff, upper_cutoff, xlabel, title, name,
-                        num_of_bins=20, min_hits=1):
+                        num_of_bins=20, min_hits=1, saveFig=False):
     # ------------------------------------------------------------------------
     # A) BUILD THE LOGARITHMIC HISTOGRAM
     # ------------------------------------------------------------------------
@@ -164,7 +164,7 @@ def fit_curve_power_law(df, lower_cutoff, upper_cutoff, xlabel, title, name,
     # F) PLOT THE DATA & THE FIT
     # ------------------------------------------------------------------------
     plot_curve_power_law(x_fit_line, y_fit_line, bin_centers, counts, fit_mask, 
-                         alpha, alpha_err, xlabel, title, savefig=True, 
+                         alpha, alpha_err, xlabel, title, savefig=saveFig, 
                          name=name)
     
 

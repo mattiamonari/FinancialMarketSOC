@@ -10,7 +10,7 @@ from wavelet import *
 from plots import *
 from market_statistics import *
 import pandas as pd
-
+import matplotlib.pyplot as plt
 
 # ------------------------------
 # GLOBAL PARAMETERS
@@ -118,7 +118,7 @@ def update_price(prices, num_buyers, num_sellers):
 # ------------------------------
 # SINGLE SIMULATION FUNCTION
 # ------------------------------
-def run_single_simulation(G, sim_id):
+def run_single_simulation(saveFig, sim_id):
     """
     Runs a single market simulation for TIME_STEPS and returns 
     avalanche sizes & durations, along with other simulation data.
@@ -179,9 +179,9 @@ def run_single_simulation(G, sim_id):
     plot_avalanches_on_log_returns(log_returns, residual_signal, filtered_log_returns, labeled_array, num_features)
     plot_original_vs_filtered_log_returns_pdf(log_returns, filtered_log_returns, bins=50, fit_gaussian_filtered = True, saveFig=saveFig)
 
-    plot_market_price(prices, moving_avg, profiler_view=True, saveFig=saveFig, num_features=num_features, labeled_array=labeled_array)
+    plot_market_price(prices, moving_avg, profiler_view=False, saveFig=saveFig, num_features=num_features, labeled_array=labeled_array)
     ratio = [num_buyers[i] / (num_sellers[i] + num_buyers[i]) for i in range(len(num_buyers))]
-    plot_ratio_buyers_sellers(ratio, profiler_view=True, saveFig=saveFig, num_features=num_features, labeled_array=labeled_array)
+    plot_ratio_buyers_sellers(ratio, profiler_view=False, saveFig=saveFig, num_features=num_features, labeled_array=labeled_array)
     # plot_weighted_volumes(weighted_volumes, profiler_view=True, saveFig=False)
 
     return {
@@ -211,6 +211,7 @@ def main():
     if len(sys.argv) == 2:
         read_data = bool(int(sys.argv[1]))
     if len(sys.argv) == 5:
+        print("Using command line arguments")
         read_data = bool(int(sys.argv[1]))
         saveFig = bool(int(sys.argv[2]))
         NUM_SIMULATIONS = int(sys.argv[3])
@@ -225,7 +226,7 @@ def main():
     # We'll collect results in a list. We'll set chunk_size=1 so that 
     # tqdm can update immediately after each simulation completes.
     with mp.Pool(processes=NUM_PROCESSES) as pool:
-        it = pool.imap_unordered(wrapper, [(G, sim_id) for sim_id in range(NUM_SIMULATIONS)], chunksize=1)
+        it = pool.imap_unordered(wrapper, [(saveFig, sim_id) for sim_id in range(NUM_SIMULATIONS)], chunksize=1)
         results = []
         for result in tqdm(it, total=NUM_SIMULATIONS, desc="Running simulations in parallel"):
             if result != -1:
@@ -262,18 +263,18 @@ def main():
     fit_curve_power_law(all_avalanche_sizes, lower_cutoff=0.7, upper_cutoff=30, 
                           xlabel="Avalanche Sizes $|P_{t+1}-P_t|$",
                           title="Log-Binned Avalanche Sizes",
-                          name="avalanche_sizes")
+                          name="avalanche_sizes", saveFig=saveFig)
     
 
     fit_curve_exponential(all_avalanche_durations, lower_cutoff=12, upper_cutoff=1e6, 
                         xlabel="Avalanche Durations (timesteps)",
                         title="Log-Binned Avalanche Durations",
-                        name="avalanche_durations")
+                        name="avalanche_durations", saveFig=saveFig)
 
     fit_curve_power_law(all_avalanche_intertimes, lower_cutoff=0.08, upper_cutoff=6000.0, 
                         xlabel="Time Between Avalanches (timesteps)",
                         title="Log-Binned Avalanche In-Between Times",
-                        name="avalanche_intertimes")
+                        name="avalanche_intertimes", saveFig=saveFig)
 
 
 if __name__ == "__main__":
