@@ -34,25 +34,7 @@ TR_TRADE_UPPER = 0.6
 # Increase TIME_STEPS to gather more data, but note longer runs = longer time
 TIME_STEPS = 1000
 
-# Number of simulations to run in parallel
-
-NUM_SIMULATIONS = 1
-# Number of parallel processes (often set to CPU threads; 
-# experiment with 8 vs 16 if you have an 8-core/16-thread CPU)
-NUM_PROCESSES = 1
-
-
-# ------------------------------
-# SINGLE SIMULATION FUNCTION
-# ------------------------------
-def run_single_simulation(sim_id):
-    """
-    Runs a single market simulation for TIME_STEPS and returns 
-    avalanche sizes & durations, along with other simulation data.
-    """
-    # Optional: set a random seed specific to sim_id for reproducibility
-    np.random.seed(sim_id)
-
+def initialize_network():
     # 1. Construct scale-free network
     G = nx.barabasi_albert_graph(NUM_NODES, m=5)
 
@@ -77,6 +59,20 @@ def run_single_simulation(sim_id):
 
         G.nodes[node]['last_update_time'] = 0
         G.nodes[node]['position'] = 'buy' if np.random.random() < 0.5 else 'sell'
+
+    return G
+
+
+# ------------------------------
+# SINGLE SIMULATION FUNCTION
+# ------------------------------
+def run_single_simulation(G, sim_id):
+    """
+    Runs a single market simulation for TIME_STEPS and returns 
+    avalanche sizes & durations, along with other simulation data.
+    """
+    # Optional: set a random seed specific to sim_id for reproducibility
+    np.random.seed(sim_id)
 
     # 3. Initialize market price and containers
     price = 100
@@ -195,16 +191,26 @@ def run_single_simulation(sim_id):
 # ------------------------------
 def main():
 
+    G = initialize_network()
+
     # Read if use saved data from command line
-    if len(sys.argv) > 1:
-        read_data = True
+    # Read number of simulations and processes
+    if len(sys.argv) == 3:
+        read_data = bool(int(sys.argv[1]))
+        NUM_SIMULATIONS = int(sys.argv[1])
+        NUM_PROCESSES = int(sys.argv[2])
     else:
         read_data = False
+
+        NUM_SIMULATIONS = 1
+        # Number of parallel processes (often set to CPU threads; 
+        # experiment with 8 vs 16 if you have an 8-core/16-thread CPU)
+        NUM_PROCESSES = 1
 
     # We'll collect results in a list. We'll set chunk_size=1 so that 
     # tqdm can update immediately after each simulation completes.
     with mp.Pool(processes=NUM_PROCESSES) as pool:
-        it = pool.imap_unordered(run_single_simulation, range(NUM_SIMULATIONS), chunksize=1)
+        it = pool.imap_unordered(run_single_simulation, (G, range(NUM_SIMULATIONS)), chunksize=1)
         results = []
         for result in tqdm(it, total=NUM_SIMULATIONS, desc="Running simulations in parallel"):
             if result != -1:
