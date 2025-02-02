@@ -5,12 +5,10 @@ import pywt
 import sys
 from scipy.ndimage import label
 from tqdm import tqdm
-import matplotlib.pyplot as plt
 from fit import *
 from wavelet import *
 from plots import *
 from market_statistics import *
-from stylised_facts import *
 import pandas as pd
 
 
@@ -33,6 +31,8 @@ TR_TRADE_UPPER = 0.6
 
 # Increase TIME_STEPS to gather more data, but note longer runs = longer time
 TIME_STEPS = 1000
+
+saveFig = False
 
 def initialize_network():
     # 1. Construct scale-free network
@@ -145,12 +145,12 @@ def run_single_simulation(G, sim_id):
     mask = np.isfinite(log_returns)
     log_returns = log_returns[mask]
 
-    plot_returns(returns, saveFig=False)
-    plot_returns(returns**2, saveFig=False, squared=True)
-    plot_returns(log_returns, saveFig=False, squared=True, log_returns=True)
+    plot_returns(returns, saveFig=saveFig)
+    plot_returns(returns**2, saveFig=saveFig, squared=True)
+    plot_returns(log_returns, saveFig=saveFig, squared=True, log_returns=True)
 
-    returns_autocorrelation(returns, saveFig=False)
-    returns_autocorrelation(returns**2, saveFig=False, squared=True)
+    returns_autocorrelation(returns, saveFig=saveFig)
+    returns_autocorrelation(returns**2, saveFig=saveFig, squared=True)
 
 
     # # 7. Wavelet filtering and avalanche extraction
@@ -171,11 +171,11 @@ def run_single_simulation(G, sim_id):
     labeled_array, num_features = label(np.abs(residual_signal) > AVALANCHE_THRESHOLD)
 
     plot_avalanches_on_log_returns(log_returns, residual_signal, filtered_log_returns, labeled_array, num_features)
-    plot_original_vs_filtered_log_returns_pdf(log_returns, filtered_log_returns, bins=50, fit_gaussian_filtered = True, saveFig=False)
+    plot_original_vs_filtered_log_returns_pdf(log_returns, filtered_log_returns, bins=50, fit_gaussian_filtered = True, saveFig=saveFig)
 
-    plot_market_price(prices, moving_avg, profiler_view=True, saveFig=False, num_features=num_features, labeled_array=labeled_array)
+    plot_market_price(prices, moving_avg, profiler_view=True, saveFig=saveFig, num_features=num_features, labeled_array=labeled_array)
     ratio = [num_buyers[i] / (num_sellers[i] + num_buyers[i]) for i in range(len(num_buyers))]
-    plot_ratio_buyers_sellers(ratio, profiler_view=True, saveFig=False, num_features=num_features, labeled_array=labeled_array)
+    plot_ratio_buyers_sellers(ratio, profiler_view=True, saveFig=saveFig, num_features=num_features, labeled_array=labeled_array)
     # plot_weighted_volumes(weighted_volumes, profiler_view=True, saveFig=False)
 
     return {
@@ -186,6 +186,10 @@ def run_single_simulation(G, sim_id):
         'C': C,
     }
 
+def wrapper(args):
+    return run_single_simulation(*args)
+
+
 # ------------------------------
 # PARALLEL EXECUTION MAIN
 # ------------------------------
@@ -195,22 +199,25 @@ def main():
 
     # Read if use saved data from command line
     # Read number of simulations and processes
-    if len(sys.argv) == 3:
+    print(len(sys.argv))
+    if len(sys.argv) == 2:
         read_data = bool(int(sys.argv[1]))
-        NUM_SIMULATIONS = int(sys.argv[1])
-        NUM_PROCESSES = int(sys.argv[2])
+    if len(sys.argv) == 5:
+        read_data = bool(int(sys.argv[1]))
+        saveFig = bool(int(sys.argv[2]))
+        NUM_SIMULATIONS = int(sys.argv[3])
+        NUM_PROCESSES = int(sys.argv[4])
     else:
         read_data = False
-
+        saveFig = False
         NUM_SIMULATIONS = 1
-        # Number of parallel processes (often set to CPU threads; 
-        # experiment with 8 vs 16 if you have an 8-core/16-thread CPU)
         NUM_PROCESSES = 1
+
 
     # We'll collect results in a list. We'll set chunk_size=1 so that 
     # tqdm can update immediately after each simulation completes.
     with mp.Pool(processes=NUM_PROCESSES) as pool:
-        it = pool.imap_unordered(run_single_simulation, (G, range(NUM_SIMULATIONS)), chunksize=1)
+        it = pool.imap_unordered(wrapper, [(G, sim_id) for sim_id in range(NUM_SIMULATIONS)], chunksize=1)
         results = []
         for result in tqdm(it, total=NUM_SIMULATIONS, desc="Running simulations in parallel"):
             if result != -1:
@@ -229,6 +236,10 @@ def main():
             all_avalanche_sizes.extend(res['avalanche_sizes'])
             all_avalanche_durations.extend(res['avalanche_durations'])
             all_avalanche_intertimes.extend(res['avalanche_intertimes'])
+
+    all_avalanche_sizes = np.array(all_avalanche_sizes)
+    all_avalanche_durations = np.array(all_avalanche_durations)
+    all_avalanche_intertimes = np.array(all_avalanche_intertimes)
 
     if not read_data:
         np.savetxt('csv/avalanche_sizes.csv', all_avalanche_sizes, delimiter=',')
