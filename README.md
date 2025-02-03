@@ -10,10 +10,12 @@ These instructions will get you a copy of the project up and running on your loc
 ```
 📦 
 └─ css_project
+   ├─ presentation
+   │  └─ ...                                     # Slides used for the presentation
    ├─ csv
    │  └─ ...                                     # Example data
    ├─ images
-   │  └─                                         # Examples results' plots
+   │  └─ ...                                     # Examples results' plots
    ├─ src
    │  ├─ main.py
    │  ├─ fit.py
