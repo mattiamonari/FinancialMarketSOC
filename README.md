@@ -39,6 +39,40 @@ You will need Python 3.6 or higher, and the following packages:
 
 ### Installing
 
-You can install the package using pip:
+You can clone the repository with the code, move into the `src` folder and run
+
+`python main.py read_data save_fig num_simulations num_processes`
+
+where the parameters indicate:
+
+- `read_data`: Controls whether to read existing data
+
+Type: Boolean (0 or 1)
+Required: Yes
+Example:
+
+`1`: Read existing data
+`0`: Do not read existing data
+
+- `save_fig`: Determines whether to save generated figures
+
+Type: Boolean (0 or 1)
+Required: Yes
+Example:
+
+`1`: Save figures
+`0`: Do not save figures
+
+- `num_simulations`: Specifies the total number of simulation runs
+
+Type: Integer
+Required: Yes
+Example: `100` runs 100 simulations
+
+- `num_processes`: Sets the number of parallel processes to use
+
+Type: Integer
+Required: Yes
+Example: `4` uses 4 parallel processes for simulations
 
 
